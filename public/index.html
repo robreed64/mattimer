@@ -12,7 +12,10 @@
 <title>BJJ Mat Timer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
-<script src="/socket.io/socket.io.js"></script>
+<script src="/supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/partykit-config.js"></script>
+<script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root {
@@ -485,6 +488,32 @@
 
 <div id="toast"></div>
 
+<!-- ─── LOGIN ────────────────────────────────────────────────────── -->
+<div id="loginView" style="display:none;position:fixed;inset:0;background:#0D0D0D;z-index:200;align-items:center;justify-content:center">
+  <div style="background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:8px;padding:2.5rem;width:100%;max-width:380px">
+    <div style="font-family:var(--font-display);font-size:2rem;letter-spacing:.15em;color:var(--mat-gold);text-align:center;margin-bottom:.25rem">BJJ MAT TIMER</div>
+    <div style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.3em;color:var(--mat-muted);text-align:center;margin-bottom:2rem;text-transform:uppercase">Sign in to your gym</div>
+    <div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1.25rem">
+      <div>
+        <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Email</label>
+        <input type="email" id="authEmail" placeholder="you@gym.com" autocomplete="email"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;transition:border-color .15s"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+          onkeydown="if(event.key==='Enter')document.getElementById('authPass').focus()">
+      </div>
+      <div>
+        <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Password</label>
+        <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;transition:border-color .15s"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+          onkeydown="if(event.key==='Enter')signIn()">
+      </div>
+    </div>
+    <button class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:.85rem" onclick="signIn()">Sign In</button>
+    <div id="authError" style="display:none;color:var(--mat-red);font-family:var(--font-ui);font-size:.85rem;text-align:center;margin-top:.75rem">Invalid email or password.</div>
+  </div>
+</div>
+
 <!-- ─── LANDING ─────────────────────────────────────────────────── -->
 <div id="landing">
   <!-- Controller access — small lock icon top-left, away from main buttons -->
@@ -500,6 +529,27 @@
   </div>
   <h1 class="landing-title" id="landingTitle">BJJ Mat Timer</h1>
   <p class="landing-sub" id="landingTagline">Competition · Training · Sparring</p>
+
+  <!-- Room picker — shown when no ?room= in URL -->
+  <div id="roomPicker" style="display:none;flex-direction:column;align-items:center;gap:1rem;width:100%;max-width:420px;margin-bottom:2rem">
+    <p style="font-family:var(--font-ui);font-size:.9rem;letter-spacing:.12em;color:var(--mat-muted);text-transform:uppercase;text-align:center">Create a gym room or join an existing one</p>
+    <button class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:1rem" onclick="createRoom()">+ Create a New Room</button>
+    <div style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.2em;color:var(--mat-muted);text-transform:uppercase">— or join —</div>
+    <div style="display:flex;gap:.5rem;width:100%">
+      <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="8"
+        style="flex:1;text-transform:uppercase;letter-spacing:.2em;font-size:1.1rem"
+        onkeydown="if(event.key==='Enter')joinRoom()">
+      <button class="btn btn-outline" onclick="joinRoom()">Join</button>
+    </div>
+  </div>
+
+  <!-- Room code bar — shown when ?room= is in URL -->
+  <div id="roomBar" style="display:none;align-items:center;gap:.75rem;margin-bottom:1.5rem;background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:4px;padding:.5rem 1rem">
+    <span style="font-family:var(--font-ui);font-size:.7rem;letter-spacing:.2em;color:var(--mat-muted);text-transform:uppercase">Room</span>
+    <span id="roomCodeDisplay" style="font-family:var(--font-display);font-size:1.6rem;letter-spacing:.15em;color:var(--mat-gold)"></span>
+    <button class="btn btn-outline" style="font-size:.7rem;padding:.3rem .65rem" onclick="copyRoomLink()" title="Copy shareable link">Copy Link</button>
+    <button class="btn btn-outline" style="font-size:.7rem;padding:.3rem .65rem;opacity:.5" onclick="changeRoom()" title="Switch to a different room">Change Room</button>
+  </div>
 
   <!-- TV Codes — tap any to connect this device as that display -->
   <div class="landing-tv-grid" id="landingTvGrid">
@@ -611,6 +661,39 @@
   </div>
 </div>
 
+<!-- ─── COACHES MODAL ─────────────────────────────────────────────── -->
+<div id="coachesModal" class="modal-backdrop" style="display:none" onclick="closeCoachesModal(event)">
+  <div class="modal-box" style="max-width:460px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">Team Management</span>
+      <button class="modal-close" onclick="closeCoachesModal()">✕</button>
+    </div>
+    <div class="modal-body" style="gap:.75rem">
+      <div id="coachList" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:.5rem"></div>
+      <div style="border-top:1px solid var(--mat-border);padding-top:.75rem">
+        <div style="font-family:var(--font-ui);font-size:.8rem;letter-spacing:.1em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.5rem">Add Coach</div>
+        <div style="display:flex;flex-direction:column;gap:.5rem">
+          <input type="email" id="newCoachEmail" placeholder="coach@gym.com" autocomplete="off"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.65rem .9rem;outline:none;width:100%;transition:border-color .15s"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+            onkeydown="if(event.key==='Enter')addCoach()">
+          <div id="coachInviteBox" style="display:none;background:rgba(212,160,23,.08);border:1px solid var(--mat-border);border-radius:4px;padding:.5rem .75rem">
+            <div style="font-family:var(--font-ui);font-size:.7rem;letter-spacing:.12em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.35rem">Invite link — share with coach</div>
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <input id="coachInviteLink" readonly style="background:transparent;border:none;color:var(--mat-gold);font-size:.8rem;flex:1;outline:none;cursor:text">
+              <button onclick="copyCoachInvite()" style="background:none;border:1px solid var(--mat-border);border-radius:3px;color:var(--mat-text);font-family:var(--font-ui);font-size:.7rem;padding:.2rem .5rem;cursor:pointer">Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeCoachesModal()">Close</button>
+      <button class="btn btn-gold" onclick="addCoach()">Add Coach</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─── CONTROLLER ───────────────────────────────────────────────── -->
 <div id="controller">
   <div class="status-bar">
@@ -667,7 +750,8 @@
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:.5rem">
-      <button class="btn btn-outline" style="font-size:.75rem;padding:.3rem .75rem" onclick="location.reload()">Exit</button>
+      <button class="btn btn-outline" id="coachesBtn" style="font-size:.75rem;padding:.3rem .75rem;display:none" onclick="openCoachesModal()">Team</button>
+      <button class="btn btn-outline" style="font-size:.75rem;padding:.3rem .75rem" onclick="signOut()">Sign Out</button>
     </div>
   </div>
 
@@ -934,17 +1018,267 @@
 </div>
 
 <script>
-// ─── SOCKET (exponential backoff reconnection) ────────────────────
-const socket = io({
-  reconnection: true,
-  reconnectionAttempts: Infinity,
-  reconnectionDelay: 1000,
-  reconnectionDelayMax: 30000,
-  randomizationFactor: 0.4,
-  timeout: 10000,
-});
-let mode = null;
+// ─── PARTYKIT SETUP ───────────────────────────────────────────────
+const PARTYKIT_HOST = window.PARTYKIT_HOST || 'localhost:1999';
+
+// Room ID comes from ?room= URL param
+const _urlParams = new URLSearchParams(location.search);
+let roomId = _urlParams.get('room') || null;
+
+let socket = null;        // PartySocket, created when role is chosen
+let mode   = null;        // 'controller' | 'display' | null
 let _displayTvCode = null;
+
+// Helper: build PartyKit HTTP API URL for this room
+function partyApiUrl(path) {
+  const proto = PARTYKIT_HOST.startsWith('localhost') ? 'http' : 'https';
+  return `${proto}://${PARTYKIT_HOST}/parties/main/${roomId}${path}`;
+}
+
+// Helper: send a typed message (replaces socket.emit)
+function emit(type, data) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(data ? { type, ...data } : { type }));
+  }
+}
+
+// Create a PartySocket connection for the given role + query params
+function openSocket(role, extraParams) {
+  if (socket) { try { socket.close(); } catch(e) {} }
+  const query = { role, ...(extraParams || {}) };
+  socket = new PartySocket({
+    host:  PARTYKIT_HOST,
+    room:  roomId,
+    party: 'main',
+    query,
+  });
+  socket.addEventListener('open',    _onOpen);
+  socket.addEventListener('close',   _onClose);
+  socket.addEventListener('message', _onMessage);
+  socket.addEventListener('error',   () => {});
+}
+
+// ─── SUPABASE AUTH ────────────────────────────────────────────────
+const _supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
+let _currentUser = null;
+let _gymRole     = null; // 'owner' | 'coach'
+let _gymId       = null;
+
+async function signIn() {
+  const email = document.getElementById('authEmail').value.trim();
+  const pass  = document.getElementById('authPass').value;
+  const errEl = document.getElementById('authError');
+  errEl.style.display = 'none';
+
+  const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pass });
+  if (error) { errEl.style.display = 'block'; return; }
+  await _afterAuth(data.user);
+}
+
+async function signOut() {
+  await _supabase.auth.signOut();
+  _currentUser = null; _gymRole = null; _gymId = null;
+  window.location.href = location.pathname; // reload without ?room=
+}
+
+async function _afterAuth(user) {
+  _currentUser = user;
+
+  // Admin → redirect to admin panel
+  if (user.app_metadata?.role === 'admin') {
+    window.location.href = '/admin.html';
+    return;
+  }
+
+  // Look up the user's gym
+  const { data: membership } = await _supabase
+    .from('gym_users')
+    .select('role, gym_id, gyms(room_code, name)')
+    .eq('user_id', user.id)
+    .single();
+
+  if (!membership) {
+    document.getElementById('authError').textContent = 'No gym assigned to your account. Contact your administrator.';
+    document.getElementById('authError').style.display = 'block';
+    await _supabase.auth.signOut();
+    return;
+  }
+
+  _gymRole = membership.role;
+  _gymId   = membership.gym_id;
+  roomId   = membership.gyms.room_code;
+
+  document.getElementById('loginView').style.display = 'none';
+
+  // Show the room bar with the gym name
+  document.getElementById('roomBar').style.display = 'flex';
+  const codeEl = document.getElementById('roomCodeDisplay');
+  if (codeEl) codeEl.textContent = membership.gyms.name || roomId;
+
+  // Show Team button for owners
+  if (_gymRole === 'owner') {
+    const btn = document.getElementById('coachesBtn');
+    if (btn) btn.style.display = '';
+  }
+
+  // Fetch config (TV codes, branding) now that we have a roomId
+  fetch(partyApiUrl('/api/config')).then(r => r.json()).then(cfg => {
+    tvCodes  = cfg.tvCodes;
+    branding = { ...branding, ...cfg.branding };
+    applyBranding();
+    restoreAudioSlots(cfg.audioSlots);
+  }).catch(() => {});
+
+  // Hide branding/settings gear for coaches
+  if (_gymRole === 'coach') {
+    document.querySelectorAll('.brand-btn').forEach(b => b.style.display = 'none');
+  }
+}
+
+// Check session on every page load
+(async function initAuth() {
+  const hashParams = new URLSearchParams(location.hash.replace('#', ''));
+  const tokenType   = hashParams.get('type');
+  const accessToken = hashParams.get('access_token');
+  const refreshToken = hashParams.get('refresh_token') || '';
+
+  if ((tokenType === 'invite' || tokenType === 'recovery') && accessToken) {
+    // Exchange the one-time tokens for a real session before showing the form
+    const { error: sessErr } = await _supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    if (sessErr) {
+      document.getElementById('loginView').style.display = 'flex';
+      const err = document.getElementById('authError');
+      if (err) { err.textContent = 'Invalid or expired invite link. Ask your admin to resend it.'; err.style.display = 'block'; }
+      return;
+    }
+    _showSetPassword();
+    return;
+  }
+
+  const { data: { session } } = await _supabase.auth.getSession();
+  if (!session) {
+    document.getElementById('loginView').style.display = 'flex';
+    return;
+  }
+  await _afterAuth(session.user);
+
+  if (roomId) {
+    document.getElementById('roomBar').style.display = 'flex';
+    const el = document.getElementById('roomCodeDisplay');
+    if (el && el.textContent === roomId) el.textContent = roomId;
+  }
+})();
+
+function _showSetPassword() {
+  const lv = document.getElementById('loginView');
+  lv.style.display = 'flex';
+  lv.innerHTML = `
+    <div style="background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:8px;padding:2.5rem;width:100%;max-width:380px">
+      <div style="font-family:var(--font-display);font-size:2rem;letter-spacing:.15em;color:var(--mat-gold);text-align:center;margin-bottom:.25rem">BJJ MAT TIMER</div>
+      <div style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.3em;color:var(--mat-muted);text-align:center;margin-bottom:2rem;text-transform:uppercase">Set your password</div>
+      <div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1.25rem">
+        <div>
+          <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">New Password</label>
+          <input type="password" id="setPassInput" placeholder="Min 8 characters"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%"
+            onkeydown="if(event.key==='Enter')setNewPassword()">
+        </div>
+      </div>
+      <button class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:.85rem" onclick="setNewPassword()">Set Password &amp; Sign In</button>
+      <div id="setPassError" style="display:none;color:var(--mat-red);font-family:var(--font-ui);font-size:.85rem;text-align:center;margin-top:.75rem"></div>
+    </div>`;
+}
+
+async function setNewPassword() {
+  const pass = document.getElementById('setPassInput').value;
+  const errEl = document.getElementById('setPassError');
+  errEl.style.display = 'none';
+  if (pass.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display = 'block'; return; }
+
+  const { data, error } = await _supabase.auth.updateUser({ password: pass });
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+
+  // Clear the hash so the token isn't reused, then route normally
+  history.replaceState(null, '', location.pathname);
+  await _afterAuth(data.user);
+}
+
+// ─── ROOM HELPERS ─────────────────────────────────────────────────
+function copyRoomLink() {
+  const url = `${location.origin}${location.pathname}?room=${roomId}`;
+  navigator.clipboard.writeText(url)
+    .then(() => toast('Room link copied!'))
+    .catch(() => prompt('Room link:', url));
+}
+
+// ─── COACHES PANEL (owner only) ───────────────────────────────────
+async function openCoachesModal() {
+  document.getElementById('coachesModal').style.display = 'flex';
+  document.getElementById('newCoachEmail').value = '';
+  document.getElementById('newCoachPass').value  = '';
+  await loadCoaches();
+}
+
+function closeCoachesModal(e) {
+  if (e && e.target !== document.getElementById('coachesModal')) return;
+  document.getElementById('coachesModal').style.display = 'none';
+}
+
+async function loadCoaches() {
+  const list = document.getElementById('coachList');
+  list.innerHTML = '<div style="color:var(--mat-muted);font-size:.85rem;padding:.25rem 0">Loading…</div>';
+
+  const { data, error } = await _supabase
+    .from('gym_users')
+    .select('id, role, user_id')
+    .eq('gym_id', _gymId)
+    .eq('role', 'coach');
+
+  if (error || !data?.length) {
+    list.innerHTML = '<div style="color:var(--mat-muted);font-family:var(--font-ui);font-size:.85rem;padding:.25rem 0">No coaches added yet.</div>';
+    return;
+  }
+
+  list.innerHTML = data.map(c => `
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;padding:.5rem .75rem">
+      <span style="font-family:var(--font-ui);font-size:.9rem">${escHtml(c.user_id)}</span>
+      <button onclick="removeCoach('${c.id}')" style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-size:.8rem;padding:.2rem .4rem" title="Remove">✕</button>
+    </div>`).join('');
+}
+
+async function addCoach() {
+  const email = document.getElementById('newCoachEmail').value.trim();
+  if (!email) { toast('Email is required'); return; }
+
+  const { data: { session } } = await _supabase.auth.getSession();
+  const res = await fetch('/api/create-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+    body: JSON.stringify({ email, gymId: _gymId, role: 'coach' }),
+  });
+  const data = await res.json();
+  if (!data.ok) { toast('Error: ' + (data.error || 'Unknown error')); return; }
+  toast('Invite created');
+  document.getElementById('newCoachEmail').value = '';
+  document.getElementById('coachInviteLink').value = data.inviteLink;
+  document.getElementById('coachInviteBox').style.display = 'block';
+  await loadCoaches();
+}
+
+function copyCoachInvite() {
+  const val = document.getElementById('coachInviteLink').value;
+  navigator.clipboard.writeText(val).then(() => toast('Link copied!')).catch(() => {});
+}
+
+async function removeCoach(gymUserId) {
+  if (!confirm('Remove this coach from your gym?')) return;
+  const { error } = await _supabase.from('gym_users').delete().eq('id', gymUserId);
+  if (error) { toast('Error: ' + error.message); return; }
+  toast('Coach removed');
+  await loadCoaches();
+}
+
+// ─── STATE ────────────────────────────────────────────────────────
 
 // ─── STATE ────────────────────────────────────────────────────────
 const state = {
@@ -1016,7 +1350,7 @@ function loadAudioFile(slot, input) {
   const localUrl = URL.createObjectURL(file);
   setAudioSlot(slot, localUrl, file.name);
   toast('Uploading ' + cap(slot) + ' sound...');
-  fetch('/api/audio/' + slot, {
+  fetch(partyApiUrl('/api/audio/' + slot), {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'audio/mpeg', 'X-Filename': file.name },
     body: file,
@@ -1038,9 +1372,8 @@ async function clearAudioFile(slot) {
   if (nameEl) { nameEl.textContent = 'Choose file'; nameEl.closest('.audio-file-btn').classList.remove('loaded'); }
   const input = document.getElementById('audio' + cap(slot)); if (input) input.value = '';
   try {
-    await fetch('/api/audio/' + slot, { method: 'DELETE' });
-    // Tell all clients (other controllers, displays) to also clear this slot
-    socket.emit('audio:clear', { slot });
+    await fetch(partyApiUrl('/api/audio/' + slot), { method: 'DELETE' });
+    emit('audio:clear', { slot });
     toast(cap(slot) + ' sound removed');
   } catch(e) {
     toast(cap(slot) + ' sound removed (offline)');
@@ -1071,28 +1404,15 @@ function restoreAudioSlots(audioSlots) {
 function testBuzzer() { playBuzzer(); }
 
 // ─── LANDING ──────────────────────────────────────────────────────
-// Fetch network info and show as fixed footer bar
-fetch('/api/network').then(r => r.json()).then(({ ips, port }) => {
-  if (!ips.length) return;
-  const footer  = document.getElementById('networkFooter');
-  const urlEl   = document.getElementById('networkFooterUrl');
-  if (footer && urlEl) {
-    urlEl.textContent = `http://${ips[0]}:${port}`;
-    footer.classList.add('visible');
-  }
-}).catch(()=>{});
-
-// Fetch config (TV codes + branding + saved audio) on load
-fetch('/api/config').then(r => r.json()).then(cfg => {
-  tvCodes  = cfg.tvCodes;
-  branding = { ...branding, ...cfg.branding };
-  applyBranding();
-  restoreAudioSlots(cfg.audioSlots);
-  // Populate landing TV code cards
-  tvCodes.forEach((code, i) => {
-    const el  = document.getElementById('landing-tv-code-' + (i+1));
-  });
-}).catch(()=>{});
+// Fetch config (TV codes + branding) on load — only when room is known
+if (roomId) {
+  fetch(partyApiUrl('/api/config')).then(r => r.json()).then(cfg => {
+    tvCodes  = cfg.tvCodes;
+    branding = { ...branding, ...cfg.branding };
+    applyBranding();
+    restoreAudioSlots(cfg.audioSlots);
+  }).catch(()=>{});
+}
 
 // ─── PROFILE SYSTEM ───────────────────────────────────────────────
 let profiles = [];
@@ -1101,7 +1421,8 @@ let _pendingProfile = null;
 function promptControllerPassword() { openProfilePicker(); }
 
 function loadProfiles() {
-  return fetch('/api/profiles')
+  if (!roomId) { profiles = []; return Promise.resolve(); }
+  return fetch(partyApiUrl('/api/profiles'))
     .then(r => r.json())
     .then(data => { profiles = Array.isArray(data) ? data : []; })
     .catch(() => { profiles = profiles || []; });
@@ -1152,7 +1473,7 @@ function selectProfile(id) {
 async function deleteProfile(id) {
   const profile = profiles.find(p => p.id === id);
   if (!profile || !confirm('Delete profile "' + profile.name + '"?')) return;
-  await fetch('/api/profiles/' + id, { method: 'DELETE' });
+  await fetch(partyApiUrl('/api/profiles/' + id), { method: 'DELETE' });
   await loadProfiles();
   renderProfileGrid();
 }
@@ -1176,7 +1497,7 @@ async function submitCreateProfile() {
   const pin  = document.getElementById('newProfilePin').value;
   if (!name) { document.getElementById('newProfileName').focus(); return; }
   document.getElementById('createProfileModal').style.display = 'none';
-  const res  = await fetch('/api/profiles', {
+  const res  = await fetch(partyApiUrl('/api/profiles'), {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ name, pin }),
   });
@@ -1212,7 +1533,7 @@ async function submitPin() {
   const err   = document.getElementById('pinError');
   const pin   = input ? input.value : '';
   if (!_pendingProfile) return;
-  const res = await fetch('/api/profiles/' + _pendingProfile.id + '/login', {
+  const res = await fetch(partyApiUrl('/api/profiles/' + _pendingProfile.id + '/login'), {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ pin }),
   });
@@ -1291,7 +1612,7 @@ function openRenameSession() {
       const newName = (inp ? inp.value.trim() : '') || myCtrlName || 'Unnamed Class';
       myCtrlName = newName;
       document.getElementById('sessionModal').style.display = 'none';
-      socket.emit('ctrl:rename', { name: newName });
+      emit('ctrl:rename', { name: newName });
       applyControllerColor();
     };
   }
@@ -1299,16 +1620,13 @@ function openRenameSession() {
 
 function startController() {
   mode = 'controller';
-  socket.emit('join:controller', {
-    name:      myCtrlName || 'Unnamed Class',
-    color:     _pendingProfile?.color || null,
-    profileId: _pendingProfile?.id    || null,
+  openSocket('controller', {
+    name:      encodeURIComponent(myCtrlName || 'Unnamed Class'),
+    color:     _pendingProfile?.color || '',
+    profileId: _pendingProfile?.id    || '',
   });
-  document.getElementById('landing').style.display = 'none';
+  document.getElementById('landing').style.display    = 'none';
   document.getElementById('controller').style.display = 'block';
-  // Keep IP footer visible on controller
-  const footer = document.getElementById('networkFooter');
-  if (footer) footer.classList.add('visible');
   updateUI();
 }
 
@@ -1316,109 +1634,215 @@ function startController() {
 function connectAsDisplay(num) {
   const code = tvCodes[num - 1];
   if (!code) {
-    // tvCodes not loaded yet — server may not be running or codes not fetched
     showConnecting('Connecting…');
-    // Wait for codes then retry
     const waitForCodes = setInterval(() => {
       const c = tvCodes[num - 1];
       if (c) { clearInterval(waitForCodes); hideConnecting(); connectAsDisplay(num); }
     }, 200);
-    setTimeout(() => { clearInterval(waitForCodes); hideConnecting(); toast('Could not connect — is the server running?'); }, 5000);
+    setTimeout(() => { clearInterval(waitForCodes); hideConnecting(); toast('Could not connect — is the room code loaded?'); }, 5000);
     return;
   }
   _displayTvCode = code;
   mode = 'display';
   showConnecting('Connecting as TV ' + num + '…');
-
-  function showDisplay() {
-    document.getElementById('landing').style.display = 'none';
-    const d = document.getElementById('display');
-    d.style.display = 'flex';
-    d.style.flexDirection = 'column';
-    // Hide the IP address footer — not needed on display screens
-    const footer = document.getElementById('networkFooter');
-    if (footer) footer.style.display = 'none';
-    generateDisplayQr();
-    requestLastKnownState();
-    setDisplayStatus('connected', 'TV ' + num);
-    hideConnecting();
-  }
-
-  if (socket.connected) {
-    socket.emit('join:tv', { code });
-    showDisplay();
-  } else {
-    socket.once('connect', () => {
-      socket.emit('join:tv', { code });
-      showDisplay();
-    });
-  }
+  openSocket('tv', { code });
+  // showDisplay is called from _onOpen once connected
 }
 
-// ─── SOCKET EVENTS ────────────────────────────────────────────────
-let _reconnectAttempt = 0;
-
-socket.on('connect', () => {
-  _reconnectAttempt = 0;
+// ─── PARTYKIT EVENT HANDLERS ──────────────────────────────────────
+function _onOpen() {
   hideReconnectOverlay();
-
-  const p  = new URLSearchParams(location.search);
-  const tv = p.get('tv');
-
-  // URL-param display (TV bookmark ?tv=CODE)
-  if (tv && mode !== 'controller') {
-    _displayTvCode = tv.toUpperCase();
+  // TV bookmark: ?room=X&tv=CODE — auto-join as display
+  const tvCode = _urlParams.get('tv');
+  if (tvCode && mode !== 'controller') {
+    _displayTvCode = tvCode.toUpperCase();
     mode = 'display';
-    socket.emit('join:tv', { code: _displayTvCode });
+    // socket was opened with role=tv&code=... already — just show display
+    _showDisplayView();
+    return;
   }
+  if (mode === 'display') _showDisplayView();
+}
 
-  // Re-join after reconnect (server restarted, lost room membership)
-  if (mode === 'display' && _displayTvCode && !tv) {
-    socket.emit('join:tv', { code: _displayTvCode });
-  }
-
-  if (mode === 'display') {
-    document.getElementById('landing').style.display = 'none';
-    const d = document.getElementById('display');
-    d.style.display = 'flex';
-    d.style.flexDirection = 'column';
-    const footer = document.getElementById('networkFooter');
-    if (footer) footer.style.display = 'none';
-    generateDisplayQr(); requestLastKnownState();
-    setDisplayStatus('connected', 'Live');
-    hideConnecting();
-  }
-});
-
-socket.on('disconnect', () => {
-  if (mode !== 'display') return;
-  showReconnectOverlay('Server offline — reconnecting…');
-  setDisplayStatus('connecting', 'Reconnecting...');
-  // Request last known state from SW so display stays populated
+function _showDisplayView() {
+  document.getElementById('landing').style.display = 'none';
+  const d = document.getElementById('display');
+  d.style.display = 'flex';
+  d.style.flexDirection = 'column';
+  generateDisplayQr();
   requestLastKnownState();
-});
-
-socket.on('reconnect_attempt', (attempt) => {
-  if (mode !== 'display') return;
-  _reconnectAttempt = attempt;
-  const text = attempt <= 2
-    ? 'Reconnecting…'
-    : `Reconnecting… (attempt ${attempt})`;
-  showReconnectOverlay(text);
-});
-
-socket.on('reconnect', () => {
-  if (mode !== 'display') return;
-  hideReconnectOverlay();
   setDisplayStatus('connected', 'Live');
-  // Re-join TV room — critical if server restarted
-  if (_displayTvCode) socket.emit('join:tv', { code: _displayTvCode });
-});
+  hideConnecting();
+}
 
-socket.on('reconnect_failed', () => {
+function _onClose() {
   if (mode !== 'display') return;
-  showReconnectOverlay('Connection lost — waiting for server…');
-});
+  showReconnectOverlay('Reconnecting…');
+  setDisplayStatus('connecting', 'Reconnecting...');
+  requestLastKnownState();
+}
+
+let dispSwRaf = null;
+
+function _onMessage(event) {
+  let msg;
+  try { msg = JSON.parse(event.data); } catch(e) { return; }
+
+  switch (msg.type) {
+
+    case 'config': {
+      tvCodes  = msg.tvCodes;
+      branding = { ...branding, ...msg.branding };
+      if (msg.ctrlSlot)  myCtrlSlot  = msg.ctrlSlot;
+      if (msg.ctrlColor) myCtrlColor = msg.ctrlColor;
+      applyBranding();
+      applyControllerColor();
+      break;
+    }
+
+    case 'monitor:status': {
+      if (mode !== 'controller') break;
+      const { tvOwner, tvDisplays, floating, ctrlSlots, ctrlNames } = msg;
+      for (let i = 1; i <= 4; i++) {
+        const dispCount  = tvDisplays?.[i] || 0;
+        const ownerSlot  = tvOwner?.[i] || null;
+        const ownerColor = ownerSlot ? CTRL_COLOR_HEX[['','blue','green','amber','pink'][ownerSlot]] : null;
+        const ownerName  = ownerSlot ? (ctrlNames?.[ownerSlot] || 'Unnamed Class') : null;
+        const isMine     = ownerSlot === myCtrlSlot;
+        const panel      = document.getElementById('monitor-' + i);
+        const statusEl   = document.getElementById('monitor-status-' + i);
+        const claimBtn   = document.getElementById('monitor-claim-' + i);
+        panel?.classList.remove('active','owned','foreign');
+        if (dispCount > 0 || ownerSlot) panel?.classList.add('active');
+        if (panel) {
+          if (ownerColor) {
+            panel.style.background = ownerColor + '12';
+            panel.style.borderColor = ownerColor + '55';
+            panel.style.borderLeftColor = ownerColor;
+          } else {
+            panel.style.background = '';
+            panel.style.borderColor = '';
+            panel.style.borderLeftColor = 'var(--mat-border)';
+          }
+        }
+        if (statusEl) {
+          if (ownerSlot && dispCount > 0)      statusEl.textContent = (isMine ? 'My class' : ownerName) + (dispCount > 1 ? ' · ' + dispCount + ' screens' : '');
+          else if (ownerSlot)                  statusEl.textContent = (isMine ? 'My class' : ownerName) + ' · no screen';
+          else if (dispCount > 0)              statusEl.textContent = dispCount + ' screen' + (dispCount > 1 ? 's' : '') + ' · unclaimed';
+          else                                 statusEl.textContent = 'Available';
+        }
+        const dotEl = document.getElementById('monitor-dot-' + i);
+        if (dotEl) { dotEl.style.background = ownerColor || (dispCount > 0 ? '#555' : ''); dotEl.style.boxShadow = ownerColor ? `0 0 6px ${ownerColor}` : ''; }
+        if (claimBtn) {
+          if (isMine) {
+            claimBtn.textContent = '✕ Release'; claimBtn.style.color = CTRL_COLOR_HEX[myCtrlColor] || ''; claimBtn.style.borderColor = (CTRL_COLOR_HEX[myCtrlColor] || '') + '88'; claimBtn.onclick = () => releaseTv(i);
+          } else if (!ownerSlot) {
+            claimBtn.textContent = '+ Claim'; claimBtn.style.color = ''; claimBtn.style.borderColor = ''; claimBtn.onclick = () => claimTv(i);
+          } else {
+            claimBtn.textContent = 'In use'; claimBtn.style.color = '#555'; claimBtn.style.borderColor = ''; claimBtn.onclick = null;
+          }
+        }
+        const landingStatus = document.getElementById('landing-tv-status-' + i);
+        const landingCard   = document.getElementById('landing-tv-' + i);
+        const landingHint   = document.getElementById('landing-tv-hint-' + i);
+        if (dispCount > 0) {
+          landingCard?.classList.add('connected','tv-taken');
+          if (landingHint) landingHint.textContent = '● In use';
+          if (landingStatus) { landingStatus.style.background = ownerColor || getSlotColor(i); landingStatus.style.boxShadow = `0 0 8px ${ownerColor || getSlotColor(i)}`; }
+        } else {
+          landingCard?.classList.remove('connected','tv-taken');
+          if (landingHint) landingHint.textContent = 'tap to connect';
+          if (landingStatus) { landingStatus.style.background = ''; landingStatus.style.boxShadow = ''; }
+        }
+      }
+      const floatPanel = document.getElementById('monitor-floating');
+      const floatCount = document.getElementById('monitor-floating-count');
+      const floatDot   = document.getElementById('monitor-floating-dot');
+      if (floating > 0) {
+        floatPanel?.classList.add('active');
+        if (floatCount) floatCount.textContent = floating + ' connected';
+        if (floatDot) { floatDot.style.background = 'var(--tv-float)'; floatDot.style.boxShadow = '0 0 6px var(--tv-float)'; }
+      } else {
+        floatPanel?.classList.remove('active');
+        if (floatCount) floatCount.textContent = '0 connected';
+        if (floatDot) { floatDot.style.background = ''; floatDot.style.boxShadow = ''; }
+      }
+      break;
+    }
+
+    case 'state':   { if (mode === 'display') { const { type: _, ...s } = msg; applyStateSnapshot(s); } break; }
+    case 'overlay': { if (mode === 'display') showOverlay(msg.msg); break; }
+    case 'branding': { branding = { ...branding, ...msg }; applyBranding(); break; }
+    case 'profiles:updated': { profiles = msg.profiles || msg; break; }
+
+    case 'audio:clear': {
+      customAudio[msg.slot] = null;
+      const nameEl = document.getElementById('audio' + cap(msg.slot) + 'Name');
+      if (nameEl) { nameEl.textContent = 'Choose file'; nameEl.closest('.audio-file-btn')?.classList.remove('loaded'); }
+      break;
+    }
+
+    case 'ctrl:color': {
+      if (mode === 'display') applyDisplayCtrlColor(msg.color, msg.name);
+      break;
+    }
+
+    case 'tab': {
+      if (mode !== 'display') break;
+      const timer = document.getElementById('displayPanelTimer');
+      const sw    = document.getElementById('displayPanelStopwatch');
+      if (msg.tab === 'stopwatch') { if (timer) timer.style.display = 'none'; if (sw) sw.style.display = 'flex'; }
+      else                         { if (timer) timer.style.display = 'block'; if (sw) sw.style.display = 'none'; }
+      break;
+    }
+
+    case 'sw:state': {
+      if (mode !== 'display') break;
+      cancelAnimationFrame(dispSwRaf);
+      const latency = Date.now() - msg.ts;
+      let dispElapsed = msg.elapsed + (msg.running ? latency : 0);
+      const swEl = document.getElementById('displaySwTime');
+      function dispSwTick() {
+        if (msg.running) dispElapsed += 16;
+        if (swEl) swEl.innerHTML = (() => {
+          const mins = Math.floor(dispElapsed/60000), secs = Math.floor((dispElapsed%60000)/1000), cs = Math.floor((dispElapsed%1000)/10);
+          return `${mins}:${String(secs).padStart(2,'0')}<span style="font-size:.4em;opacity:.55">.${String(cs).padStart(2,'0')}</span>`;
+        })();
+        if (msg.running) dispSwRaf = requestAnimationFrame(dispSwTick);
+      }
+      dispSwTick();
+      break;
+    }
+
+    case 'sound': {
+      if (mode !== 'display') break;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const play = () => {
+          switch (msg.soundType) {
+            case 'beep':   playCountdownBeep(); break;
+            case 'accent': playAccentBeep(); break;
+            case 'buzzer': if (!playCustomAudio('stop'))  playBuzzer(); break;
+            case 'start':  if (!playCustomAudio('start')) beep(660, 0.12, 'sine', 0.5); break;
+            case 'rest':   if (!playCustomAudio('rest'))  { beep(330, 0.3, 'sine', 0.45); setTimeout(() => beep(294, 0.3, 'sine', 0.35), 250); } break;
+          }
+        };
+        if (audioCtx.state === 'suspended') audioCtx.resume().then(play).catch(()=>{});
+        else play();
+      } catch(e) {}
+      break;
+    }
+
+    case 'error': { hideConnecting(); toast('Error: ' + msg.msg); break; }
+    case 'tv:taken': {
+      mode = null; _displayTvCode = null;
+      document.getElementById('display').style.display = 'none';
+      document.getElementById('landing').style.display = 'flex';
+      toast('⚠ TV ' + msg.slot + ' is already in use — choose a different screen');
+      break;
+    }
+  }
+}
 
 // ─── RECONNECT OVERLAY ────────────────────────────────────────────
 function showReconnectOverlay(text) {
@@ -1432,203 +1856,23 @@ function hideReconnectOverlay() {
   if (el) el.style.display = 'none';
 }
 
-socket.on('error', (msg) => { hideConnecting(); toast('Error: ' + msg); });
-socket.on('tv:taken', ({ slot }) => {
-  mode = null;
-  _displayTvCode = null;
-  document.getElementById('display').style.display = 'none';
-  document.getElementById('landing').style.display = 'flex';
-  toast('⚠ TV ' + slot + ' is already in use — choose a different screen');
-});
-
-socket.on('config', (cfg) => {
-  tvCodes  = cfg.tvCodes;
-  branding = { ...branding, ...cfg.branding };
-  if (cfg.ctrlSlot)  myCtrlSlot  = cfg.ctrlSlot;
-  if (cfg.ctrlColor) myCtrlColor = cfg.ctrlColor;
-  applyBranding();
-  applyControllerColor();
-  tvCodes.forEach((code, i) => {
-    const el  = document.getElementById('landing-tv-code-' + (i+1));
-  });
-});
-
-socket.on('state',   (data) => { if (mode === 'display') applyStateSnapshot(data); });
-socket.on('overlay', (msg)  => { if (mode === 'display') showOverlay(msg); });
-socket.on('branding', (b)   => { branding = { ...branding, ...b }; applyBranding(); });
-socket.on('profiles:updated', (updated) => { profiles = updated; });
-socket.on('audio:clear', ({ slot }) => {
-  customAudio[slot] = null;
-  const nameEl = document.getElementById('audio' + cap(slot) + 'Name');
-  if (nameEl) { nameEl.textContent = 'Choose file'; nameEl.closest('.audio-file-btn')?.classList.remove('loaded'); }
-});
-
-socket.on('ctrl:color', ({ color, name } = {}) => {
-  if (mode !== 'display') return;
-  applyDisplayCtrlColor(color, name);
-});
-
-// Tab switching on display
-socket.on('tab', (tab) => {
-  if (mode !== 'display') return;
-  const timer = document.getElementById('displayPanelTimer');
-  const sw    = document.getElementById('displayPanelStopwatch');
-  if (tab === 'stopwatch') {
-    if (timer) timer.style.display = 'none';
-    if (sw)    sw.style.display = 'flex';
-  } else {
-    if (timer) timer.style.display = 'block';
-    if (sw)    sw.style.display = 'none';
+// Auto-connect as TV display if ?room=X&tv=CODE is in the URL
+(function checkTvBookmark() {
+  const tvCode = _urlParams.get('tv');
+  if (tvCode && roomId) {
+    _displayTvCode = tvCode.toUpperCase();
+    mode = 'display';
+    openSocket('tv', { code: _displayTvCode });
   }
-});
-
-// Stopwatch state on display — uses ts to account for network latency
-let dispSwRaf = null;
-socket.on('sw:state', ({ elapsed, running, ts }) => {
-  if (mode !== 'display') return;
-  cancelAnimationFrame(dispSwRaf);
-  const latency = Date.now() - ts;
-  let dispElapsed = elapsed + (running ? latency : 0);
-  const el = document.getElementById('displaySwTime');
-
-  function dispSwTick() {
-    if (running) dispElapsed += 16; // ~60fps
-    if (el) el.innerHTML = (() => {
-      const mins = Math.floor(dispElapsed/60000);
-      const secs = Math.floor((dispElapsed%60000)/1000);
-      const cs   = Math.floor((dispElapsed%1000)/10);
-      return `${mins}:${String(secs).padStart(2,'0')}<span style="font-size:.4em;opacity:.55">.${String(cs).padStart(2,'0')}</span>`;
-    })();
-    if (running) dispSwRaf = requestAnimationFrame(dispSwTick);
-  }
-  dispSwTick();
-});
-
-socket.on('tv:connected', ({ slot }) => {
-  document.getElementById('tv-slot-' + slot)?.classList.add('connected');
-  document.getElementById('landing-tv-' + slot)?.classList.add('connected');
-});
-socket.on('tv:disconnected', ({ slot }) => {
-  document.getElementById('tv-slot-' + slot)?.classList.remove('connected');
-  document.getElementById('landing-tv-' + slot)?.classList.remove('connected');
-});
-
-// ─── MONITOR STATUS ───────────────────────────────────────────────
-socket.on('monitor:status', ({ tvOwner, tvDisplays, floating, ctrlSlots, ctrlNames }) => {
-  if (mode !== 'controller') return;
-
-  for (let i = 1; i <= 4; i++) {
-    const dispCount  = tvDisplays?.[i] || 0;
-    const ownerSlot  = tvOwner?.[i] || null;
-    const ownerColor = ownerSlot ? CTRL_COLOR_HEX[['','blue','green','amber','pink'][ownerSlot]] : null;
-    const ownerName  = ownerSlot ? (ctrlNames?.[ownerSlot] || 'Unnamed Class') : null;
-    const isMine     = ownerSlot === myCtrlSlot;
-
-    const panel     = document.getElementById('monitor-' + i);
-    const statusEl  = document.getElementById('monitor-status-' + i);
-    const badgeEl   = document.getElementById('monitor-badge-' + i);
-    const claimBtn  = document.getElementById('monitor-claim-' + i);
-
-    // Remove old color classes
-    panel?.classList.remove('active','owned','foreign');
-
-    if (dispCount > 0 || ownerSlot) panel?.classList.add('active');
-
-    // Color the panel border by owning controller
-    if (panel) {
-      panel.style.borderLeftColor = ownerColor || 'var(--mat-border)';
-      if (ownerColor) {
-        panel.style.background = ownerColor + '12';
-        panel.style.borderColor = ownerColor + '55';
-        panel.style.borderLeftColor = ownerColor;
-      } else {
-        panel.style.background = '';
-        panel.style.borderColor = '';
-        panel.style.borderLeftColor = 'var(--mat-border)';
-      }
-    }
-
-    // Status text
-    if (statusEl) {
-      if (ownerSlot && dispCount > 0) {
-        const label = isMine ? 'My class' : (ownerName || 'Another class');
-        statusEl.textContent = label + (dispCount > 1 ? ' · ' + dispCount + ' screens' : '');
-      } else if (ownerSlot) {
-        const label = isMine ? 'My class' : (ownerName || 'Another class');
-        statusEl.textContent = label + ' · no screen';
-      } else if (dispCount > 0) {
-        statusEl.textContent = dispCount + ' screen' + (dispCount > 1 ? 's' : '') + ' · unclaimed';
-      } else {
-        statusEl.textContent = 'Available';
-      }
-    }
-
-    // Dot color
-    const dotEl = document.getElementById('monitor-dot-' + i);
-    if (dotEl) {
-      dotEl.style.background   = ownerColor || (dispCount > 0 ? '#555' : '');
-      dotEl.style.boxShadow    = ownerColor ? `0 0 6px ${ownerColor}` : '';
-    }
-
-    // Claim/release button
-    if (claimBtn) {
-      if (isMine) {
-        claimBtn.textContent = '✕ Release';
-        claimBtn.style.color = CTRL_COLOR_HEX[myCtrlColor] || '';
-        claimBtn.style.borderColor = CTRL_COLOR_HEX[myCtrlColor] + '88' || '';
-        claimBtn.onclick = () => releaseTv(i);
-      } else if (!ownerSlot) {
-        claimBtn.textContent = '+ Claim';
-        claimBtn.style.color = '';
-        claimBtn.style.borderColor = '';
-        claimBtn.onclick = () => claimTv(i);
-      } else {
-        claimBtn.textContent = 'In use';
-        claimBtn.style.color = '#555';
-        claimBtn.style.borderColor = '';
-        claimBtn.onclick = null;
-      }
-    }
-
-    // Landing card status
-    const landingStatus = document.getElementById('landing-tv-status-' + i);
-    const landingCard   = document.getElementById('landing-tv-' + i);
-    const landingHint   = document.getElementById('landing-tv-hint-' + i);
-    if (dispCount > 0) {
-      landingCard?.classList.add('connected');
-      landingCard?.classList.add('tv-taken');
-      if (landingHint)   landingHint.textContent = '● In use';
-      if (landingStatus) { landingStatus.style.background = ownerColor || getSlotColor(i); landingStatus.style.boxShadow = `0 0 8px ${ownerColor || getSlotColor(i)}`; }
-    } else {
-      landingCard?.classList.remove('connected');
-      landingCard?.classList.remove('tv-taken');
-      if (landingHint)   landingHint.textContent = 'tap to connect';
-      if (landingStatus) { landingStatus.style.background = ''; landingStatus.style.boxShadow = ''; }
-    }
-  }
-
-  // Floating panel
-  const floatPanel = document.getElementById('monitor-floating');
-  const floatCount = document.getElementById('monitor-floating-count');
-  const floatDot   = document.getElementById('monitor-floating-dot');
-  if (floating > 0) {
-    floatPanel?.classList.add('active');
-    if (floatCount) floatCount.textContent = floating + ' connected';
-    if (floatDot)   { floatDot.style.background = 'var(--tv-float)'; floatDot.style.boxShadow = '0 0 6px var(--tv-float)'; }
-  } else {
-    floatPanel?.classList.remove('active');
-    if (floatCount) floatCount.textContent = '0 connected';
-    if (floatDot)   { floatDot.style.background = ''; floatDot.style.boxShadow = ''; }
-  }
-});
+})();
 
 // ─── TV CLAIM / RELEASE ───────────────────────────────────────────
 function claimTv(tvSlot) {
-  socket.emit('tv:claim', { tvSlot });
+  emit('tv:claim', { tvSlot });
   myTvClaims.add(tvSlot);
 }
 function releaseTv(tvSlot) {
-  socket.emit('tv:release', { tvSlot });
+  emit('tv:release', { tvSlot });
   myTvClaims.delete(tvSlot);
 }
 
@@ -1663,39 +1907,7 @@ function getSlotColor(slot) {
   return ['','#3B82F6','#10B981','#F59E0B','#EC4899'][slot] || '#888';
 }
 
-// ─── DISPLAY AUDIO — mirror sounds from controller ────────────────
-// ─── DISPLAY AUDIO ────────────────────────────────────────────────
-// AudioContext must be created/resumed after a user gesture.
-// On TVs that auto-connect via URL, we create it lazily on first sound
-// and call resume() which browsers allow even without a gesture
-// once the page has been visible for a moment.
-function tryResumeAudio() {
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-  } catch(e) {}
-}
-
-socket.on('sound', (type) => {
-  if (mode !== 'display') return;
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const play = () => {
-      switch (type) {
-        case 'beep':   playCountdownBeep(); break;
-        case 'accent': playAccentBeep(); break;
-        case 'buzzer': if (!playCustomAudio('stop'))  playBuzzer(); break;
-        case 'start':  if (!playCustomAudio('start')) beep(660, 0.12, 'sine', 0.5); break;
-        case 'rest':   if (!playCustomAudio('rest'))  { beep(330, 0.3, 'sine', 0.45); setTimeout(() => beep(294, 0.3, 'sine', 0.35), 250); } break;
-      }
-    };
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume().then(play).catch(() => {});
-    } else {
-      play();
-    }
-  } catch(e) {}
-});
+// Display audio is now handled inside _onMessage (case 'sound')
 
 
 // ─── TIMER LOGIC ──────────────────────────────────────────────────
@@ -1706,7 +1918,7 @@ function startTimer() {
   getAudioCtx();
   const playedCustom = playCustomAudio('start');
   if (!playedCustom) beep(660, 0.12, 'sine', 0.5);
-  socket.emit('sound', 'start');
+  emit('sound', { soundType: 'start' });
   if (!timerInterval) timerInterval = setInterval(tick, 1000);
   document.getElementById('startPauseBtn').textContent = '⏸ Pause';
   document.getElementById('startPauseBtn').className = 'btn btn-red btn-massive';
@@ -1735,14 +1947,14 @@ function throttledBroadcast() {
   const now = Date.now();
   if (now - _lastBroadcast > 900) { broadcastState(); _lastBroadcast = now; }
 }
-function broadcastState() { socket.emit('state', { ...state }); }
+function broadcastState() { emit('state', { ...state }); }
 
 function handleTickSounds(prev, newTime) {
   const beepOn = document.getElementById('soundBeepToggle')?.checked ?? true;
   if (state.phase !== 'fight') return;
   if (beepOn && newTime > 0 && newTime <= 10) {
-    if (newTime <= 3) { playAccentBeep(); socket.emit('sound', 'accent'); }
-    else              { playCountdownBeep(); socket.emit('sound', 'beep'); }
+    if (newTime <= 3) { playAccentBeep(); emit('sound', { soundType: 'accent' }); }
+    else              { playCountdownBeep(); emit('sound', { soundType: 'beep' }); }
   }
 }
 
@@ -1751,7 +1963,7 @@ function handlePhaseEnd() {
   if (state.phase === 'fight') {
     const playedCustom = playCustomAudio('stop');
     if (!playedCustom && buzzerOn) playBuzzer();
-    if (playedCustom || buzzerOn) socket.emit('sound', 'buzzer');
+    if (playedCustom || buzzerOn) emit('sound', { soundType: 'buzzer' });
   }
   if (state.phase === 'fight') {
     if (state.currentRound >= state.totalRounds) {
@@ -1759,29 +1971,27 @@ function handlePhaseEnd() {
       clearInterval(timerInterval); timerInterval = null;
       document.getElementById('startPauseBtn').textContent = '▶ Start';
       document.getElementById('startPauseBtn').className = 'btn btn-green btn-massive';
-      socket.emit('overlay', 'TIME!');
+      emit('overlay', { msg: 'TIME!' });
       broadcastState();
     } else if (state.restDuration > 0) {
       state.phase = 'rest'; state.timeRemaining = state.restDuration;
       const playedCustomRest = playCustomAudio('rest');
       if (!playedCustomRest) { beep(330, 0.3, 'sine', 0.45); beep(294, 0.3, 'sine', 0.35, 0.25); }
-      socket.emit('sound', 'rest');
-      socket.emit('overlay', 'REST');
+      emit('sound', { soundType: 'rest' });
+      emit('overlay', { msg: 'REST' });
     } else {
-      // No rest period — go straight to next round with start sound
       const playedCustomStart = playCustomAudio('start');
       if (!playedCustomStart) beep(660, 0.12, 'sine', 0.5);
-      socket.emit('sound', 'start');
+      emit('sound', { soundType: 'start' });
       nextRound();
     }
   } else {
-    // Rest ended — start next round
     state.currentRound++; state.phase = 'fight'; state.timeRemaining = state.roundDuration;
     const playedCustomStart = playCustomAudio('start');
     if (!playedCustomStart) beep(660, 0.12, 'sine', 0.5);
-    socket.emit('sound', 'start');
-    socket.emit('overlay', 'FIGHT!');
-    setTimeout(() => socket.emit('overlay', ''), 2500);
+    emit('sound', { soundType: 'start' });
+    emit('overlay', { msg: 'FIGHT!' });
+    setTimeout(() => emit('overlay', { msg: '' }), 2500);
   }
   updateUI(); broadcastState();
 }
@@ -1792,7 +2002,7 @@ function resetTimer() {
   state.timeRemaining = state.roundDuration;
   document.getElementById('startPauseBtn').textContent = '▶ Start';
   document.getElementById('startPauseBtn').className = 'btn btn-green btn-massive';
-  updateUI(); broadcastState(); socket.emit('overlay', '');
+  updateUI(); broadcastState(); emit('overlay', { msg: '' });
 }
 
 function nextRound() {
@@ -1822,7 +2032,7 @@ function setDurationMin(min) {
   });
   updateUI(); broadcastState();
   if (_pendingProfile?.id) {
-    socket.emit('profile:save', { profileId: _pendingProfile.id, settings: { roundDuration: state.roundDuration } });
+    emit('profile:save', { profileId: _pendingProfile.id, settings: { roundDuration: state.roundDuration } });
   }
 }
 
@@ -1839,7 +2049,7 @@ function updateConfig() {
   updateUI(); broadcastState();
   // Auto-save settings back to profile
   if (_pendingProfile?.id) {
-    socket.emit('profile:save', {
+    emit('profile:save', {
       profileId: _pendingProfile.id,
       settings: {
         roundDuration:    state.roundDuration,
@@ -1854,8 +2064,8 @@ function updateConfig() {
 }
 
 // ─── MESSAGES ─────────────────────────────────────────────────────
-function sendMsg() { const m = document.getElementById('msgInput').value.trim(); socket.emit('overlay', m); }
-function sendQuickMsg(msg) { document.getElementById('msgInput').value = msg; socket.emit('overlay', msg); }
+function sendMsg() { const m = document.getElementById('msgInput').value.trim(); emit('overlay', { msg: m }); }
+function sendQuickMsg(m) { document.getElementById('msgInput').value = m; emit('overlay', { msg: m }); }
 
 // ─── UI UPDATE ────────────────────────────────────────────────────
 function formatTime(s) { return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
@@ -1931,8 +2141,7 @@ function switchTab(tab) {
   document.getElementById('tabStopwatch').classList.toggle('active', tab === 'stopwatch');
   document.getElementById('panelTimer').classList.toggle('hidden', tab !== 'timer');
   document.getElementById('panelStopwatch').classList.toggle('hidden', tab !== 'stopwatch');
-  // Tell displays which panel to show
-  socket.emit('tab', tab);
+  emit('tab', { tab });
 }
 
 // ─── STOPWATCH ────────────────────────────────────────────────────
@@ -1947,8 +2156,7 @@ function swFormatDisplay(ms) {
 }
 
 function swBroadcast() {
-  // Send elapsed + whether running + timestamp so displays can interpolate
-  socket.emit('sw:state', { elapsed: swElapsed, running: swRunning, ts: Date.now() });
+  emit('sw:state', { elapsed: swElapsed, running: swRunning, ts: Date.now() });
 }
 
 function swTick() {
@@ -2068,7 +2276,7 @@ async function saveBranding() {
   if (logoInput._pendingDataUrl) branding.logoDataUrl = logoInput._pendingDataUrl;
   const newPins = { 1: document.getElementById('bPin1')?.value||'', 2: document.getElementById('bPin2')?.value||'', 3: document.getElementById('bPin3')?.value||'', 4: document.getElementById('bPin4')?.value||'' };
   Object.assign(slotPins, newPins);
-  await fetch('/api/branding', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...branding, slotPins: newPins }) });
+  if (roomId) await fetch(partyApiUrl('/api/branding'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...branding }) });
   applyBranding();
   document.getElementById('brandingModal').style.display='none';
   toast('✓ Settings saved');
@@ -2096,18 +2304,11 @@ function generateDisplayQr() {
   const container = document.getElementById('displayQrCode');
   const label     = document.getElementById('displayQrLabel');
   if (!container) return;
-
-  fetch('/api/network')
-    .then(r => r.json())
-    .then(({ ipUrl, mdnsName, ips, port }) => {
-      // Always use raw IP — works on every device including Android
-      const url = ipUrl || location.origin;
-      // Show both the IP and the .local name as a label
-      const ipDisplay = ips && ips[0] ? `${ips[0]}:${port}` : location.host;
-      const localName = mdnsName ? `${mdnsName}.local` : '';
-      renderQr(container, label, url, ipDisplay, localName);
-    })
-    .catch(() => renderQr(container, label, location.origin, location.host, ''));
+  // QR shows the room URL so phones can scan and join the same room
+  const url = roomId
+    ? `${location.origin}${location.pathname}?room=${roomId}`
+    : location.origin;
+  renderQr(container, label, url, url.replace(/^https?:\/\//, ''), '');
 }
 
 function renderQr(container, label, url, ipDisplay, localName) {
@@ -2177,27 +2378,13 @@ function requestLastKnownState() {
   }
 }
 
-// ─── Electron IPC bridge ──────────────────────────────────────────
-// When running inside Electron, supplement the fetch-based network info
-// with data from the main process via preload IPC.
-if (window.electronAPI) {
-  window.electronAPI.getNetworkInfo().then(({ ips, port }) => {
-    if (!ips.length) return;
-    const footer = document.getElementById('networkFooter');
-    const urlEl  = document.getElementById('networkFooterUrl');
-    if (footer && urlEl) {
-      urlEl.textContent = `http://${ips[0]}:${port}`;
-      footer.classList.add('visible');
-    }
-  }).catch(() => {});
+// ─── TV URL helper (updated for room-based URLs) ──────────────────
+function copyTvLink(num) {
+  const code = tvCodes[num - 1]; if (!code) return;
+  const url = `${location.origin}${location.pathname}?room=${roomId}&tv=${code}`;
+  navigator.clipboard.writeText(url).then(() => toast(`TV ${num} link copied!`)).catch(() => prompt('TV ' + num + ' link:', url));
 }
 </script>
-
-<!-- Fixed bottom bar showing server address -->
-<div class="network-footer" id="networkFooter">
-  <span class="network-footer-label">Open on any device at</span>
-  <span class="network-footer-url" id="networkFooterUrl"></span>
-</div>
 
 </body>
 </html>

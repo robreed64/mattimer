@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BJJ Mat Timer — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<script src="/supabase-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0D0D0D; --panel: #1A1A1A; --border: #2A2A2A;
+    --text: #F0EDE8; --muted: #666; --gold: #D4A017; --red: #C0392B;
+    --green: #27AE60; --blue: #2980B9;
+    --font-ui: 'Barlow Condensed', sans-serif;
+    --font-body: 'Barlow', sans-serif;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; }
+  a { color: var(--gold); text-decoration: none; }
+
+  /* Layout */
+  .admin-header {
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: .75rem 1.5rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  .admin-title { font-family: var(--font-ui); font-size: 1.2rem; letter-spacing: .2em; color: var(--gold); }
+  .admin-body { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: .25rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+  .tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted);
+    font-family: var(--font-ui); font-size: 1rem; letter-spacing: .1em; padding: .5rem 1rem;
+    cursor: pointer; transition: all .15s; margin-bottom: -1px; }
+  .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .tab-panel { display: none; } .tab-panel.active { display: block; }
+
+  /* Cards / tables */
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 1.5rem; }
+  .card-header { padding: .75rem 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .card-title { font-family: var(--font-ui); font-size: 1rem; letter-spacing: .15em; color: var(--muted); text-transform: uppercase; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-family: var(--font-ui); font-size: .75rem; letter-spacing: .15em; color: var(--muted); text-transform: uppercase; padding: .6rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+  td { padding: .7rem 1rem; border-bottom: 1px solid #1f1f1f; font-size: .95rem; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .badge { display: inline-block; font-family: var(--font-ui); font-size: .7rem; letter-spacing: .1em; padding: .2rem .5rem; border-radius: 3px; text-transform: uppercase; }
+  .badge-owner { background: rgba(212,160,23,.15); color: var(--gold); }
+  .badge-coach { background: rgba(41,128,185,.15); color: #5DADE2; }
+  .badge-admin { background: rgba(192,57,43,.15); color: #E74C3C; }
+
+  /* Forms */
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .form-row.single { grid-template-columns: 1fr; }
+  .form-group { display: flex; flex-direction: column; gap: .4rem; }
+  label { font-family: var(--font-ui); font-size: .8rem; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+  input, select { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-family: var(--font-body); font-size: .95rem; padding: .6rem .8rem; outline: none; width: 100%; transition: border-color .15s; }
+  input:focus, select:focus { border-color: var(--gold); }
+  select option { background: var(--panel); }
+
+  /* Buttons */
+  .btn { border: none; border-radius: 4px; cursor: pointer; font-family: var(--font-ui); font-size: .9rem; letter-spacing: .1em; padding: .55rem 1.1rem; transition: all .15s; }
+  .btn-gold { background: var(--gold); color: #000; font-weight: 700; }
+  .btn-gold:hover { background: #e6b020; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { border-color: var(--gold); color: var(--gold); }
+  .btn-danger { background: transparent; border: 1px solid transparent; color: var(--muted); font-size: .8rem; }
+  .btn-danger:hover { color: var(--red); }
+  .btn-sm { font-size: .75rem; padding: .3rem .65rem; }
+
+  /* Inline add form */
+  .add-form { padding: 1rem; background: rgba(255,255,255,.02); border-top: 1px solid var(--border); }
+  .add-form .form-row { margin-bottom: .75rem; }
+  .add-form .form-actions { display: flex; justify-content: flex-end; gap: .5rem; }
+
+  /* Toast */
+  #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(4rem);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+    color: var(--text); font-family: var(--font-ui); font-size: .9rem; padding: .6rem 1.2rem;
+    transition: transform .25s; pointer-events: none; z-index: 999; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Empty state */
+  .empty { padding: 2rem; text-align: center; color: var(--muted); font-size: .9rem; }
+
+  /* Login overlay */
+  #loginOverlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .login-box { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 2.5rem; width: 100%; max-width: 380px; }
+  .login-title { font-family: var(--font-ui); font-size: 1.4rem; letter-spacing: .2em; color: var(--gold); margin-bottom: 1.5rem; text-align: center; }
+  .login-error { color: var(--red); font-size: .85rem; margin-top: .5rem; display: none; }
+</style>
+</head>
+<body>
+
+<div id="loginOverlay">
+  <div class="login-box">
+    <div class="login-title">ADMIN LOGIN</div>
+    <div class="form-group" style="margin-bottom:.75rem">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="admin@example.com" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+    </div>
+    <div class="form-group" style="margin-bottom:1.25rem">
+      <label>Password</label>
+      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')adminLogin()">
+    </div>
+    <button class="btn btn-gold" style="width:100%" onclick="adminLogin()">Sign In</button>
+    <div class="login-error" id="loginError">Invalid email or password.</div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="admin-header">
+    <div class="admin-title">🥋 BJJ Mat Timer — Admin</div>
+    <button class="btn btn-outline btn-sm" onclick="adminLogout()">Sign Out</button>
+  </div>
+
+  <div class="admin-body">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('gyms')">Gyms</button>
+      <button class="tab" onclick="switchTab('users')">Users</button>
+    </div>
+
+    <!-- GYMS TAB -->
+    <div class="tab-panel active" id="tabGyms">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">All Gyms</span>
+          <button class="btn btn-gold btn-sm" onclick="toggleAddGym()">+ Add Gym</button>
+        </div>
+        <div id="addGymForm" class="add-form" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Gym Name</label>
+              <input type="text" id="newGymName" placeholder="e.g. Downtown BJJ" maxlength="60">
+            </div>
+            <div class="form-group">
+              <label>Room Code <span style="color:var(--muted);font-weight:400">(auto-generated)</span></label>
+              <input type="text" id="newGymCode" placeholder="Auto" maxlength="8" style="text-transform:uppercase;letter-spacing:.15em">
+            </div>
+          </div>
+          <div class="add-form" style="padding:0;border:none;background:none">
+            <div class="form-actions">
+              <button class="btn btn-outline btn-sm" onclick="toggleAddGym()">Cancel</button>
+              <button class="btn btn-gold btn-sm" onclick="createGym()">Create Gym</button>
+            </div>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Name</th><th>Room Code</th><th>Owners</th><th>Coaches</th><th></th></tr></thead>
+          <tbody id="gymTableBody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- USERS TAB -->
+    <div class="tab-panel" id="tabUsers">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">All Users</span>
+          <button class="btn btn-gold btn-sm" onclick="toggleAddUser()">+ Add User</button>
+        </div>
+        <div id="addUserForm" class="add-form" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" id="newUserEmail" placeholder="owner@gym.com">
+            </div>
+            <div class="form-group">
+              <label>Gym</label>
+              <select id="newUserGym"><option value="">Select a gym…</option></select>
+            </div>
+          </div>
+          <div class="form-row single">
+            <div class="form-group">
+              <label>Role</label>
+              <select id="newUserRole">
+                <option value="owner">Owner</option>
+                <option value="coach">Coach</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-outline btn-sm" onclick="toggleAddUser()">Cancel</button>
+            <button class="btn btn-gold btn-sm" onclick="createUser()">Send Invite</button>
+          </div>
+        </div>
+        <!-- Invite link shown after creating a user -->
+        <div id="inviteLinkBox" style="display:none;padding:.75rem 1rem;background:rgba(212,160,23,.08);border-top:1px solid var(--border)">
+          <div style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--muted);text-transform:uppercase;margin-bottom:.4rem">Invite Link — share this with the user</div>
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <input id="inviteLinkInput" readonly style="background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--gold);font-size:.8rem;padding:.4rem .6rem;flex:1;outline:none;cursor:text">
+            <button class="btn btn-outline btn-sm" onclick="copyInviteLink()">Copy</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Email</th><th>Gym</th><th>Role</th><th></th></tr></thead>
+          <tbody id="userTableBody"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
+
+let gymsCache = [];
+
+// ─── AUTH ─────────────────────────────────────────────────────────
+
+async function adminLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+  if (error) { errEl.style.display = 'block'; return; }
+
+  const isAdmin = data.user.app_metadata?.role === 'admin';
+  if (!isAdmin) {
+    errEl.textContent = 'This account does not have admin access.';
+    errEl.style.display = 'block';
+    await supabase.auth.signOut();
+    return;
+  }
+  showApp();
+}
+
+async function adminLogout() {
+  await supabase.auth.signOut();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+}
+
+async function showApp() {
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  await Promise.all([loadGyms(), loadUsers()]);
+}
+
+// Check existing session on load
+(async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    const isAdmin = session.user.app_metadata?.role === 'admin';
+    if (isAdmin) { showApp(); return; }
+    await supabase.auth.signOut();
+  }
+})();
+
+// ─── TABS ─────────────────────────────────────────────────────────
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['gyms','users'][i] === name));
+  document.getElementById('tabGyms').classList.toggle('active', name === 'gyms');
+  document.getElementById('tabUsers').classList.toggle('active', name === 'users');
+}
+
+// ─── GYMS ─────────────────────────────────────────────────────────
+
+function _makeCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let c = '';
+  for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
+}
+
+async function loadGyms() {
+  const { data, error } = await supabase
+    .from('gyms')
+    .select('*, gym_users(role)')
+    .order('created_at', { ascending: false });
+
+  if (error) { toast('Error loading gyms: ' + error.message); return; }
+  gymsCache = data || [];
+  renderGymTable();
+  populateGymSelect();
+}
+
+function renderGymTable() {
+  const tbody = document.getElementById('gymTableBody');
+  if (!gymsCache.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No gyms yet.</td></tr>'; return; }
+  tbody.innerHTML = gymsCache.map(g => {
+    const owners  = g.gym_users.filter(u => u.role === 'owner').length;
+    const coaches = g.gym_users.filter(u => u.role === 'coach').length;
+    return `<tr>
+      <td><strong>${esc(g.name)}</strong></td>
+      <td style="font-family:monospace;letter-spacing:.15em;color:var(--gold)">${esc(g.room_code)}</td>
+      <td>${owners}</td>
+      <td>${coaches}</td>
+      <td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="deleteGym('${g.id}','${esc(g.name)}')">Remove</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function populateGymSelect() {
+  const sel = document.getElementById('newUserGym');
+  sel.innerHTML = '<option value="">Select a gym…</option>' +
+    gymsCache.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+}
+
+function toggleAddGym() {
+  const f = document.getElementById('addGymForm');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  if (f.style.display === 'block') {
+    document.getElementById('newGymCode').value = _makeCode();
+    document.getElementById('newGymName').focus();
+  }
+}
+
+async function createGym() {
+  const name = document.getElementById('newGymName').value.trim();
+  const code = (document.getElementById('newGymCode').value.trim() || _makeCode()).toUpperCase();
+  if (!name) { toast('Gym name is required'); return; }
+
+  const { error } = await supabase.from('gyms').insert({ name, room_code: code });
+  if (error) { toast('Error: ' + error.message); return; }
+  toast('Gym created');
+  document.getElementById('newGymName').value = '';
+  document.getElementById('addGymForm').style.display = 'none';
+  await loadGyms();
+}
+
+async function deleteGym(id, name) {
+  if (!confirm(`Delete gym "${name}"? This will also remove all users assigned to it.`)) return;
+  const { error } = await supabase.from('gyms').delete().eq('id', id);
+  if (error) { toast('Error: ' + error.message); return; }
+  toast('Gym removed');
+  await Promise.all([loadGyms(), loadUsers()]);
+}
+
+// ─── USERS ────────────────────────────────────────────────────────
+
+async function loadUsers() {
+  const { data, error } = await supabase
+    .from('gym_users')
+    .select('id, role, user_id, gyms(id, name), auth_users_view(email)')
+    .order('created_at', { ascending: false });
+
+  if (error) { toast('Error loading users: ' + error.message); return; }
+  renderUserTable(data || []);
+}
+
+function renderUserTable(rows) {
+  const tbody = document.getElementById('userTableBody');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">No users yet.</td></tr>'; return; }
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td>${esc(r.auth_users_view?.email || r.user_id)}</td>
+    <td>${esc(r.gyms?.name || '—')}</td>
+    <td><span class="badge badge-${r.role}">${r.role}</span></td>
+    <td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="removeUser('${r.id}')">Remove</button></td>
+  </tr>`).join('');
+}
+
+function toggleAddUser() {
+  const f = document.getElementById('addUserForm');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  if (f.style.display === 'block') document.getElementById('newUserEmail').focus();
+}
+
+async function createUser() {
+  const email = document.getElementById('newUserEmail').value.trim();
+  const gymId = document.getElementById('newUserGym').value;
+  const role  = document.getElementById('newUserRole').value;
+
+  if (!email || !gymId) { toast('Email and gym are required'); return; }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch('/api/create-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+    body: JSON.stringify({ email, gymId, role }),
+  });
+  const data = await res.json();
+  if (!data.ok) { toast('Error: ' + (data.error || 'Unknown error')); return; }
+
+  toast('Invite created');
+  document.getElementById('newUserEmail').value = '';
+  document.getElementById('inviteLinkInput').value = data.inviteLink;
+  document.getElementById('inviteLinkBox').style.display = 'block';
+  await loadUsers();
+}
+
+function copyInviteLink() {
+  const input = document.getElementById('inviteLinkInput');
+  navigator.clipboard.writeText(input.value)
+    .then(() => toast('Link copied!'))
+    .catch(() => { input.select(); document.execCommand('copy'); toast('Link copied!'); });
+}
+
+async function removeUser(gymUserId) {
+  if (!confirm('Remove this user from their gym?')) return;
+  const { error } = await supabase.from('gym_users').delete().eq('id', gymUserId);
+  if (error) { toast('Error: ' + error.message); return; }
+  toast('User removed');
+  await loadUsers();
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let _toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>

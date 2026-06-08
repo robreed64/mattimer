@@ -1,0 +1,8 @@
+{
+  "buildCommand": "",
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/((?!admin\\.html).*)", "destination": "/index.html" }
+  ]
+}
