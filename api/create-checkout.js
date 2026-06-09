@@ -24,23 +24,35 @@ module.exports = async function handler(req, res) {
   const { data: { user: caller }, error: authErr } = await admin.auth.getUser(callerJwt);
   if (authErr || !caller) return res.status(401).json({ error: 'Invalid session' });
 
-  const { data: membership } = await admin
-    .from('gym_users')
-    .select('gym_id, role, gyms(id, name, stripe_customer_id)')
-    .eq('user_id', caller.id)
-    .single();
+  const isAdmin = caller.app_metadata?.role === 'admin';
+  let gymId, gymDisplayName, customerId;
 
-  if (!membership || membership.role !== 'owner') {
-    return res.status(403).json({ error: 'Only gym owners can manage billing' });
+  if (isAdmin) {
+    const { roomId: bodyRoomId } = req.body || {};
+    if (!bodyRoomId) return res.status(400).json({ error: 'roomId required' });
+    const { data: gym } = await admin.from('gyms').select('id, name, stripe_customer_id').eq('room_code', bodyRoomId).single();
+    if (!gym) return res.status(404).json({ error: 'Gym not found' });
+    gymId = gym.id;
+    gymDisplayName = gym.name;
+    customerId = gym.stripe_customer_id;
+  } else {
+    const { data: membership } = await admin
+      .from('gym_users')
+      .select('gym_id, role, gyms(id, name, stripe_customer_id)')
+      .eq('user_id', caller.id)
+      .single();
+    if (!membership || membership.role !== 'owner') {
+      return res.status(403).json({ error: 'Only gym owners can manage billing' });
+    }
+    gymId = membership.gym_id;
+    gymDisplayName = membership.gyms.name;
+    customerId = membership.gyms.stripe_customer_id;
   }
-
-  const gymId = membership.gym_id;
-  let customerId = membership.gyms.stripe_customer_id;
 
   if (!customerId) {
     const customer = await stripe.customers.create({
       email: caller.email,
-      name: membership.gyms.name || caller.email,
+      name: gymDisplayName || caller.email,
       metadata: { gym_id: gymId },
     });
     customerId = customer.id;
