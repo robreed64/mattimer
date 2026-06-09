@@ -26,14 +26,25 @@ module.exports = async function handler(req, res) {
   const { data: { user: caller }, error: authErr } = await admin.auth.getUser(callerJwt);
   if (authErr || !caller) return res.status(401).json({ error: 'Invalid session' });
 
-  const { data: membership } = await admin
-    .from('gym_users')
-    .select('gym_id, role')
-    .eq('user_id', caller.id)
-    .single();
+  const isAdmin = caller.app_metadata?.role === 'admin';
+  let gymId;
 
-  if (!membership || membership.role !== 'owner') {
-    return res.status(403).json({ error: 'Only gym owners can manage rooms' });
+  if (isAdmin) {
+    const { roomId } = req.body || {};
+    if (!roomId) return res.status(400).json({ error: 'roomId required' });
+    const { data: gym } = await admin.from('gyms').select('id').eq('room_code', roomId).single();
+    if (!gym) return res.status(404).json({ error: 'Gym not found for that room code' });
+    gymId = gym.id;
+  } else {
+    const { data: membership } = await admin
+      .from('gym_users')
+      .select('gym_id, role')
+      .eq('user_id', caller.id)
+      .single();
+    if (!membership || membership.role !== 'owner') {
+      return res.status(403).json({ error: 'Only gym owners can manage rooms' });
+    }
+    gymId = membership.gym_id;
   }
 
   if (req.method === 'POST') {
@@ -45,7 +56,7 @@ module.exports = async function handler(req, res) {
       code = makeCode();
       ({ error: insertErr } = await admin
         .from('gym_rooms')
-        .insert({ gym_id: membership.gym_id, name: name.trim(), room_code: code }));
+        .insert({ gym_id: gymId, name: name.trim(), room_code: code }));
       attempts++;
     } while (insertErr?.code === '23505' && attempts < 5); // retry on rare code collision
 
@@ -61,7 +72,7 @@ module.exports = async function handler(req, res) {
       .from('gym_rooms')
       .delete()
       .eq('id', id)
-      .eq('gym_id', membership.gym_id); // scope to caller's gym
+      .eq('gym_id', gymId); // scope to caller's gym
 
     if (delErr) return res.status(500).json({ error: delErr.message });
     return res.status(200).json({ ok: true });

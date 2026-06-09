@@ -1698,7 +1698,7 @@ async function addRoomPrompt() {
   const res = await fetch('/api/create-room', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-    body: JSON.stringify({ name: name.trim() }),
+    body: JSON.stringify({ name: name.trim(), roomId }),
   });
   const data = await res.json();
   if (!res.ok) { toast('Error: ' + (data.error || 'Could not create room')); return; }
@@ -1712,7 +1712,7 @@ async function deleteRoom(id) {
   const res = await fetch('/api/create-room', {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-    body: JSON.stringify({ id }),
+    body: JSON.stringify({ id, roomId }),
   });
   const data = await res.json();
   if (!res.ok) { toast('Error: ' + (data.error || 'Could not remove room')); return; }
