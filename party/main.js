@@ -76,7 +76,7 @@ export default class BjjTimerServer {
       this.ctrlSlots[slot] = connection.id;
       this.ctrlNames[slot] = name;
       const ctrlColor = color || CTRL_COLORS[slot];
-      this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId };
+      this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, connectedAt: Date.now() };
       connection.setState({ role: 'controller', slot });
 
       connection.send(JSON.stringify({
@@ -143,6 +143,15 @@ export default class BjjTimerServer {
             this.tvOwner[tv] = null;
             this._sendToTv(tv, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
           }
+        }
+        const duration = Math.round((Date.now() - (ctrl.connectedAt || Date.now())) / 1000);
+        if (duration > 30) {
+          (async () => {
+            const sessions = (await this.room.storage.get('sessions')) || [];
+            sessions.push({ date: new Date(ctrl.connectedAt).toISOString(), name: ctrl.name, slot: ctrl.slot, duration });
+            if (sessions.length > 100) sessions.splice(0, sessions.length - 100);
+            await this.room.storage.put('sessions', sessions);
+          })();
         }
       }
     } else if (st.role === 'tv') {
@@ -242,6 +251,12 @@ export default class BjjTimerServer {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (!this.config) await this.onStart();
 
+    // GET /api/sessions
+    if (req.method === 'GET' && apiPath === '/api/sessions') {
+      const sessions = (await this.room.storage.get('sessions')) || [];
+      return Response.json({ sessions: sessions.slice(-20).reverse() }, { headers: cors });
+    }
+
     // GET /api/config
     if (req.method === 'GET' && apiPath === '/api/config') {
       return Response.json({
@@ -315,6 +330,17 @@ export default class BjjTimerServer {
       await this.room.storage.put('config', this.config);
       this.room.broadcast(JSON.stringify({ type: 'branding', ...this.config.branding }));
       return Response.json({ ok: true }, { headers: cors });
+    }
+
+    // POST /api/tvCodes/:slot/regenerate
+    const tvRegenMatch = apiPath.match(/^\/api\/tvCodes\/(\d+)\/regenerate$/);
+    if (req.method === 'POST' && tvRegenMatch) {
+      const idx = parseInt(tvRegenMatch[1]) - 1;
+      if (idx < 0 || idx > 3) return Response.json({ error: 'Invalid slot' }, { status: 400, headers: cors });
+      this.config.tvCodes[idx] = makeCode();
+      await this.room.storage.put('config', this.config);
+      this.room.broadcast(JSON.stringify({ type: 'tvCodes', tvCodes: this.config.tvCodes }));
+      return Response.json({ ok: true, tvCodes: this.config.tvCodes }, { headers: cors });
     }
 
     // Audio — not supported in cloud mode; DELETE is a no-op so clear works

@@ -473,6 +473,37 @@
 
 <div id="toast"></div>
 
+<!-- ─── MARKETING ───────────────────────────────────────────────── -->
+<div id="marketingView" style="display:none;position:fixed;inset:0;background:#0D0D0D;z-index:200;align-items:flex-start;justify-content:center;overflow-y:auto">
+  <div style="width:100%;max-width:560px;padding:4rem 2rem 3rem;text-align:center;box-sizing:border-box">
+    <div style="width:72px;height:72px;margin:0 auto 1.25rem">
+      <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><circle cx="40" cy="40" r="36" fill="none" stroke="#D4A017" stroke-width="2"/><path d="M20 55 Q30 25 40 40 Q50 55 60 25" fill="none" stroke="#C0392B" stroke-width="3" stroke-linecap="round"/><circle cx="40" cy="40" r="4" fill="#D4A017"/></svg>
+    </div>
+    <h1 style="font-family:var(--font-display);font-size:2.6rem;letter-spacing:.12em;color:var(--mat-text);margin:0 0 .5rem;line-height:1.1">BJJ MAT TIMER</h1>
+    <p style="font-family:var(--font-ui);font-size:.95rem;color:var(--mat-muted);margin:.5rem auto 2.5rem;line-height:1.65;max-width:400px">Real-time countdown timers synced to your wall TVs. No app installs, no hardware — works in any browser.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.85rem;margin-bottom:2.5rem">
+      <div style="background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:6px;padding:1rem .75rem">
+        <div style="font-size:1.5rem;margin-bottom:.4rem">📺</div>
+        <div style="font-family:var(--font-ui);font-size:.8rem;font-weight:700;color:var(--mat-text);margin-bottom:.25rem">Wall TV Sync</div>
+        <div style="font-family:var(--font-ui);font-size:.72rem;color:var(--mat-muted);line-height:1.4">Live timer on every screen in your gym</div>
+      </div>
+      <div style="background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:6px;padding:1rem .75rem">
+        <div style="font-size:1.5rem;margin-bottom:.4rem">🥋</div>
+        <div style="font-family:var(--font-ui);font-size:.8rem;font-weight:700;color:var(--mat-text);margin-bottom:.25rem">Multi-Mat</div>
+        <div style="font-family:var(--font-ui);font-size:.72rem;color:var(--mat-muted);line-height:1.4">Up to 4 classes running simultaneously</div>
+      </div>
+      <div style="background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:6px;padding:1rem .75rem">
+        <div style="font-size:1.5rem;margin-bottom:.4rem">⚙</div>
+        <div style="font-family:var(--font-ui);font-size:.8rem;font-weight:700;color:var(--mat-text);margin-bottom:.25rem">White Label</div>
+        <div style="font-family:var(--font-ui);font-size:.72rem;color:var(--mat-muted);line-height:1.4">Your gym name and logo on every screen</div>
+      </div>
+    </div>
+    <button class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:.9rem;margin-bottom:.75rem" onclick="showLogin()">Sign In to Your Gym</button>
+    <a href="?room=demo" style="display:block;font-family:var(--font-ui);font-size:.85rem;letter-spacing:.08em;color:var(--mat-muted);text-decoration:none;padding:.6rem;border:1px solid var(--mat-border);border-radius:4px;margin-bottom:2rem" onmouseover="this.style.color='var(--mat-text)'" onmouseout="this.style.color='var(--mat-muted)'">Try Demo — No Signup Required</a>
+    <p style="font-family:var(--font-ui);font-size:.72rem;color:var(--mat-muted)">Contact <a href="mailto:robreed64@gmail.com" style="color:var(--mat-gold);text-decoration:none">robreed64@gmail.com</a> to get your gym set up</p>
+  </div>
+</div>
+
 <!-- ─── LOGIN ────────────────────────────────────────────────────── -->
 <div id="loginView" style="display:none;position:fixed;inset:0;background:#0D0D0D;z-index:200;align-items:center;justify-content:center">
   <div style="background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:8px;padding:2.5rem;width:100%;max-width:380px">
@@ -503,6 +534,15 @@
     <div style="text-align:center;margin-top:.9rem">
       <button type="button" onclick="forgotPassword()" style="background:none;border:none;color:var(--mat-muted);font-family:var(--font-ui);font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0">Forgot password?</button>
     </div>
+  </div>
+</div>
+
+<!-- ─── MULTI-ROOM PICKER ────────────────────────────────────────── -->
+<div id="gymRoomPicker" style="display:none;position:fixed;inset:0;background:#0D0D0D;z-index:200;align-items:center;justify-content:center">
+  <div style="background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:8px;padding:2rem 2rem 1.5rem;width:100%;max-width:420px;margin:1rem;box-sizing:border-box">
+    <div style="font-family:var(--font-display);font-size:1.8rem;letter-spacing:.12em;color:var(--mat-gold);text-align:center;margin-bottom:.25rem">SELECT ROOM</div>
+    <div style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.2em;color:var(--mat-muted);text-align:center;margin-bottom:1.5rem;text-transform:uppercase">Your gym has multiple mat rooms</div>
+    <div id="gymRoomList" style="display:flex;flex-direction:column;gap:.6rem"></div>
   </div>
 </div>
 
@@ -589,6 +629,15 @@
       <button onclick="dismissOnboarding()" style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-family:var(--font-ui);font-size:.7rem;letter-spacing:.1em;padding:.15rem .4rem;border-radius:3px;border:1px solid var(--mat-border)">Dismiss</button>
     </div>
     <div id="onboardingSteps" style="display:flex;flex-direction:column;gap:.5rem"></div>
+  </div>
+
+  <!-- Recent activity — shown to owners when session history exists -->
+  <div id="activityCard" style="display:none;width:100%;max-width:680px;background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:6px;padding:1rem 1.25rem;margin-top:.5rem;box-sizing:border-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+      <span style="font-family:var(--font-ui);font-size:.75rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--mat-muted)">Recent Classes</span>
+      <button onclick="dismissActivity()" style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-family:var(--font-ui);font-size:.7rem;letter-spacing:.1em;padding:.15rem .4rem;border-radius:3px;border:1px solid var(--mat-border)">Dismiss</button>
+    </div>
+    <div id="activityList" style="display:flex;flex-direction:column"></div>
   </div>
 
 </div>
@@ -1052,6 +1101,15 @@
           <div id="bPreviewTagline" class="brand-preview-tagline">Competition · Training · Sparring</div>
         </div>
       </div>
+      <div class="modal-field" id="tvCodesSection" style="display:none">
+        <label>TV Access Codes</label>
+        <div id="tvCodesList" style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem"></div>
+      </div>
+      <div class="modal-field" id="roomsSection" style="display:none">
+        <label>Mat Rooms</label>
+        <div id="roomsList" style="display:flex;flex-direction:column;gap:.4rem"></div>
+        <button class="btn btn-outline" style="width:100%;font-size:.8rem;padding:.45rem;margin-top:.4rem" onclick="addRoomPrompt()">+ Add Room</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeBrandingModal()">Cancel</button>
@@ -1107,6 +1165,8 @@ let _currentUser = null;
 let _gymRole     = null; // 'owner' | 'coach'
 let _gymId       = null;
 let _gymSub      = null; // { status, trial_ends_at }
+let _gymName     = null;
+let _allRooms    = []; // populated when gym has multiple rooms
 
 function togglePw(inputId, btn) {
   const el = document.getElementById(inputId);
@@ -1138,6 +1198,11 @@ async function signOut() {
   await _supabase.auth.signOut();
   _currentUser = null; _gymRole = null; _gymId = null;
   window.location.href = location.pathname;
+}
+
+function showLogin() {
+  document.getElementById('marketingView').style.display = 'none';
+  document.getElementById('loginView').style.display = 'flex';
 }
 
 // ─── ACCOUNT MODAL ────────────────────────────────────────────────
@@ -1366,6 +1431,7 @@ async function _afterAuth(user) {
     .single();
 
   if (!membership) {
+    document.getElementById('loginView').style.display = 'flex';
     document.getElementById('authError').textContent = 'No gym assigned to your account. Contact your administrator.';
     document.getElementById('authError').style.display = 'block';
     await _supabase.auth.signOut();
@@ -1374,36 +1440,29 @@ async function _afterAuth(user) {
 
   _gymRole = membership.role;
   _gymId   = membership.gym_id;
-  roomId   = membership.gyms.room_code;
+  _gymName = membership.gyms.name;
   _gymSub  = { status: membership.gyms.subscription_status, trial_ends_at: membership.gyms.trial_ends_at };
 
-  document.getElementById('loginView').style.display = 'none';
-
-  // Show the room bar with the gym name
-  document.getElementById('roomBar').style.display = 'flex';
-  const codeEl = document.getElementById('roomCodeDisplay');
-  if (codeEl) codeEl.textContent = membership.gyms.name || roomId;
-
-  // Show Team button for owners
+  // Check for additional rooms (owners only — coaches always go to the main room)
   if (_gymRole === 'owner') {
-    const btn = document.getElementById('coachesBtn');
-    if (btn) btn.style.display = '';
+    const { data: extraRooms } = await _supabase
+      .from('gym_rooms')
+      .select('id, name, room_code')
+      .eq('gym_id', _gymId)
+      .order('created_at');
+    if (extraRooms && extraRooms.length > 0) {
+      _allRooms = [
+        { id: null, name: 'Main Mat', room_code: membership.gyms.room_code },
+        ...extraRooms,
+      ];
+      document.getElementById('loginView').style.display = 'none';
+      _showRoomPicker();
+      return;
+    }
   }
 
-  // Fetch config (TV codes, branding) now that we have a roomId
-  fetch(partyApiUrl('/api/config')).then(r => r.json()).then(cfg => {
-    tvCodes  = cfg.tvCodes;
-    branding = { ...branding, ...cfg.branding };
-    applyBranding();
-    restoreAudioSlots(cfg.audioSlots);
-    showOnboardingIfNeeded();
-    if (_gymRole === 'owner') _checkSubscription();
-  }).catch(() => {});
-
-  // Hide branding/settings gear for coaches
-  if (_gymRole === 'coach') {
-    document.querySelectorAll('.brand-btn').forEach(b => b.style.display = 'none');
-  }
+  roomId = membership.gyms.room_code;
+  _finishRoomSetup();
 }
 
 // Check session on every page load
@@ -1434,7 +1493,11 @@ async function _afterAuth(user) {
 
   const { data: { session } } = await _supabase.auth.getSession();
   if (!session) {
-    document.getElementById('loginView').style.display = 'flex';
+    if (roomId) {
+      document.getElementById('loginView').style.display = 'flex';
+    } else {
+      document.getElementById('marketingView').style.display = 'flex';
+    }
     return;
   }
   await _afterAuth(session.user);
@@ -1500,6 +1563,152 @@ function copyRoomLink() {
 
 function changeRoom() {
   location.href = location.pathname;
+}
+
+// ─── ROOM HELPERS (multi-room) ────────────────────────────────────
+function _showRoomPicker() {
+  const list = document.getElementById('gymRoomList');
+  list.innerHTML = _allRooms.map(r => `
+    <button class="btn btn-outline" style="width:100%;text-align:left;padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:center" onclick="selectRoom('${escHtml(r.room_code)}')">
+      <span style="font-family:var(--font-ui);font-size:.95rem">${escHtml(r.name)}</span>
+      <span style="font-family:var(--font-display);font-size:1.2rem;letter-spacing:.15em;color:var(--mat-gold)">${escHtml(r.room_code)}</span>
+    </button>
+  `).join('');
+  document.getElementById('gymRoomPicker').style.display = 'flex';
+}
+
+function selectRoom(code) {
+  roomId = code;
+  const url = new URL(location.href);
+  url.searchParams.set('room', code);
+  history.replaceState(null, '', url.toString());
+  _finishRoomSetup();
+}
+
+function _finishRoomSetup() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('gymRoomPicker').style.display = 'none';
+  document.getElementById('roomBar').style.display = 'flex';
+  const codeEl = document.getElementById('roomCodeDisplay');
+  if (codeEl) codeEl.textContent = _gymName || roomId;
+
+  if (_gymRole === 'owner') {
+    const btn = document.getElementById('coachesBtn');
+    if (btn) btn.style.display = '';
+  }
+
+  fetch(partyApiUrl('/api/config')).then(r => r.json()).then(cfg => {
+    tvCodes  = cfg.tvCodes;
+    branding = { ...branding, ...cfg.branding };
+    applyBranding();
+    restoreAudioSlots(cfg.audioSlots);
+    showOnboardingIfNeeded();
+    if (_gymRole === 'owner') {
+      _checkSubscription();
+      loadRecentSessions();
+    }
+  }).catch(() => {});
+
+  if (_gymRole === 'coach') {
+    document.querySelectorAll('.brand-btn').forEach(b => b.style.display = 'none');
+  }
+}
+
+// ─── SESSION HISTORY ──────────────────────────────────────────────
+async function loadRecentSessions() {
+  if (_gymRole !== 'owner' || !roomId) return;
+  const res = await fetch(partyApiUrl('/api/sessions')).catch(() => null);
+  if (!res?.ok) return;
+  const { sessions } = await res.json();
+  if (!sessions?.length) return;
+  const card = document.getElementById('activityCard');
+  const list = document.getElementById('activityList');
+  if (!card || !list) return;
+  list.innerHTML = sessions.map(s => {
+    const d = new Date(s.date);
+    const mins = Math.floor(s.duration / 60);
+    const dur = mins >= 1 ? mins + 'm' : s.duration + 's';
+    return `<div style="display:flex;align-items:center;gap:.75rem;padding:.3rem 0;border-bottom:1px solid var(--mat-border);font-family:var(--font-ui);font-size:.82rem">
+      <span style="color:var(--mat-muted);width:6ch;flex-shrink:0">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
+      <span style="color:var(--mat-text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.name)}</span>
+      <span style="color:var(--mat-muted);flex-shrink:0">${dur}</span>
+    </div>`;
+  }).join('');
+  card.style.display = 'block';
+}
+
+function dismissActivity() {
+  const card = document.getElementById('activityCard');
+  if (card) card.style.display = 'none';
+}
+
+// ─── TV CODE REGENERATION ─────────────────────────────────────────
+async function regenerateTvCode(slot) {
+  const btn = document.getElementById('regenBtn-' + slot);
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const res = await fetch(partyApiUrl(`/api/tvCodes/${slot}/regenerate`), { method: 'POST' });
+    const data = await res.json();
+    if (data.tvCodes) {
+      tvCodes = data.tvCodes;
+      for (let i = 1; i <= 4; i++) {
+        const landingEl = document.getElementById('landing-tv-code-' + i);
+        if (landingEl) landingEl.textContent = tvCodes[i - 1];
+        const modalEl = document.getElementById('tvCode-' + i);
+        if (modalEl) modalEl.textContent = tvCodes[i - 1];
+      }
+      toast('TV ' + slot + ' code regenerated');
+    }
+  } catch(e) { toast('Error regenerating code'); }
+  if (btn) { btn.disabled = false; btn.textContent = 'Regen'; }
+}
+
+// ─── MULTI-ROOM MANAGEMENT ────────────────────────────────────────
+async function loadRoomsList() {
+  if (!_gymId) return;
+  const { data: rooms } = await _supabase.from('gym_rooms').select('id, name, room_code').eq('gym_id', _gymId).order('created_at');
+  const list = document.getElementById('roomsList');
+  if (!list) return;
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;background:var(--mat-dark);border-radius:4px;border:1px solid var(--mat-border)">
+    <span style="font-family:var(--font-ui);font-size:.82rem">Main Mat</span>
+    <span style="font-family:var(--font-display);font-size:.85rem;letter-spacing:.15em;color:var(--mat-gold)">${roomId}</span>
+  </div>`;
+  if (rooms) {
+    for (const r of rooms) {
+      const roomUrl = `${location.origin}${location.pathname}?room=${encodeURIComponent(r.room_code)}`;
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;background:var(--mat-dark);border-radius:4px;border:1px solid var(--mat-border)">
+        <div>
+          <div style="font-family:var(--font-ui);font-size:.82rem">${escHtml(r.name)}</div>
+          <div style="font-family:var(--font-display);font-size:.72rem;letter-spacing:.12em;color:var(--mat-gold)">${r.room_code}</div>
+        </div>
+        <div style="display:flex;gap:.35rem;align-items:center">
+          <button class="btn btn-outline" style="font-size:.7rem;padding:.25rem .5rem" onclick="navigator.clipboard.writeText('${roomUrl}').then(()=>toast('Link copied!'))">Copy Link</button>
+          <button style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-size:.85rem;padding:.15rem .35rem;border-radius:3px" onclick="deleteRoom('${r.id}')" title="Remove">✕</button>
+        </div>
+      </div>`;
+    }
+  }
+  list.innerHTML = html;
+}
+
+async function addRoomPrompt() {
+  const name = prompt('Room name (e.g. "Kids Mat", "MMA Cage"):');
+  if (!name?.trim()) return;
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  const { error } = await _supabase.from('gym_rooms').insert({ gym_id: _gymId, name: name.trim(), room_code: code });
+  if (error) { toast('Error: ' + error.message); return; }
+  toast(`Room "${name.trim()}" created — code: ${code}`);
+  loadRoomsList();
+}
+
+async function deleteRoom(id) {
+  if (!confirm('Remove this room? Anyone using its code will lose access.')) return;
+  const { error } = await _supabase.from('gym_rooms').delete().eq('id', id);
+  if (error) { toast('Error: ' + error.message); return; }
+  toast('Room removed.');
+  loadRoomsList();
 }
 
 // ─── COACHES PANEL (owner only) ───────────────────────────────────
@@ -2080,6 +2289,16 @@ function _onMessage(event) {
     case 'state':   { if (mode === 'display') { const { type: _, ...s } = msg; applyStateSnapshot(s); } break; }
     case 'overlay': { if (mode === 'display') showOverlay(msg.msg); break; }
     case 'branding': { branding = { ...branding, ...msg }; applyBranding(); break; }
+    case 'tvCodes': {
+      if (msg.tvCodes) {
+        tvCodes = msg.tvCodes;
+        for (let i = 1; i <= 4; i++) {
+          const el = document.getElementById('landing-tv-code-' + i);
+          if (el) el.textContent = tvCodes[i - 1];
+        }
+      }
+      break;
+    }
     case 'profiles:updated': { profiles = msg.profiles || msg; break; }
 
     case 'audio:clear': {
@@ -2536,6 +2755,30 @@ function openBrandingModal() {
     document.getElementById('logoUpload').closest('.audio-file-btn').classList.remove('loaded');
   }
   updateBrandPreview();
+
+  // TV codes section (owners only)
+  const tvSection = document.getElementById('tvCodesSection');
+  const tvList = document.getElementById('tvCodesList');
+  if (_gymRole === 'owner' && tvCodes && tvSection && tvList) {
+    tvSection.style.display = '';
+    tvList.innerHTML = tvCodes.map((code, i) => `
+      <div style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;padding:.5rem .75rem;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-family:var(--font-ui);font-size:.7rem;color:var(--mat-muted);letter-spacing:.15em;text-transform:uppercase">TV ${i + 1}</div>
+          <div id="tvCode-${i + 1}" style="font-family:var(--font-display);font-size:1.1rem;letter-spacing:.2em;color:var(--mat-gold)">${code}</div>
+        </div>
+        <button id="regenBtn-${i + 1}" class="btn btn-outline" style="font-size:.72rem;padding:.3rem .6rem" onclick="regenerateTvCode(${i + 1})">Regen</button>
+      </div>
+    `).join('');
+  }
+
+  // Rooms section (owners only)
+  const roomsSection = document.getElementById('roomsSection');
+  if (_gymRole === 'owner' && roomsSection) {
+    roomsSection.style.display = '';
+    loadRoomsList();
+  }
+
   document.getElementById('brandingModal').style.display='flex';
 }
 function closeBrandingModal(e) {
