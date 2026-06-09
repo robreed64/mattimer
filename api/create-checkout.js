@@ -36,17 +36,18 @@ module.exports = async function handler(req, res) {
     gymDisplayName = gym.name;
     customerId = gym.stripe_customer_id;
   } else {
-    const { data: membership } = await admin
+    const { data: membership, error: memErr } = await admin
       .from('gym_users')
-      .select('gym_id, role, gyms(id, name, stripe_customer_id)')
+      .select('gym_id, role')
       .eq('user_id', caller.id)
       .single();
-    if (!membership || membership.role !== 'owner') {
-      return res.status(403).json({ error: 'Only gym owners can manage billing' });
+    if (memErr || !membership || membership.role !== 'owner') {
+      return res.status(403).json({ error: 'Only gym owners can manage billing', detail: memErr?.message });
     }
     gymId = membership.gym_id;
-    gymDisplayName = membership.gyms.name;
-    customerId = membership.gyms.stripe_customer_id;
+    const { data: gym } = await admin.from('gyms').select('id, name, stripe_customer_id').eq('id', gymId).single();
+    gymDisplayName = gym?.name;
+    customerId = gym?.stripe_customer_id;
   }
 
   if (!customerId) {
