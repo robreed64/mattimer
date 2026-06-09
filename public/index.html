@@ -498,9 +498,10 @@
         <div style="font-family:var(--font-ui);font-size:.72rem;color:var(--mat-muted);line-height:1.4">Your gym name and logo on every screen</div>
       </div>
     </div>
-    <button class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:.9rem;margin-bottom:.75rem" onclick="showLogin()">Sign In to Your Gym</button>
-    <a href="?room=demo" style="display:block;font-family:var(--font-ui);font-size:.85rem;letter-spacing:.08em;color:var(--mat-muted);text-decoration:none;padding:.6rem;border:1px solid var(--mat-border);border-radius:4px;margin-bottom:2rem" onmouseover="this.style.color='var(--mat-text)'" onmouseout="this.style.color='var(--mat-muted)'">Try Demo — No Signup Required</a>
-    <p style="font-family:var(--font-ui);font-size:.72rem;color:var(--mat-muted)">Contact <a href="mailto:robreed64@gmail.com" style="color:var(--mat-gold);text-decoration:none">robreed64@gmail.com</a> to get your gym set up</p>
+    <button class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:.9rem;margin-bottom:.65rem" onclick="showSignup()">Start Free Trial — 30 Days Free</button>
+    <button class="btn btn-outline" style="width:100%;font-size:.9rem;padding:.7rem;margin-bottom:.65rem" onclick="showLogin()">Sign In to Existing Gym</button>
+    <a href="?room=demo" style="display:block;font-family:var(--font-ui);font-size:.85rem;letter-spacing:.08em;color:var(--mat-muted);text-decoration:none;padding:.55rem;border:1px solid var(--mat-border);border-radius:4px;margin-bottom:2rem" onmouseover="this.style.color='var(--mat-text)'" onmouseout="this.style.color='var(--mat-muted)'">Try Demo — No Signup Required</a>
+    <p style="font-family:var(--font-ui);font-size:.72rem;color:var(--mat-muted)">Questions? <a href="mailto:robreed64@gmail.com" style="color:var(--mat-gold);text-decoration:none">robreed64@gmail.com</a></p>
   </div>
 </div>
 
@@ -533,6 +534,50 @@
     <div id="authError" style="display:none;color:var(--mat-red);font-family:var(--font-ui);font-size:.85rem;text-align:center;margin-top:.75rem">Invalid email or password.</div>
     <div style="text-align:center;margin-top:.9rem">
       <button type="button" onclick="forgotPassword()" style="background:none;border:none;color:var(--mat-muted);font-family:var(--font-ui);font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0">Forgot password?</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SIGNUP ────────────────────────────────────────────────────── -->
+<div id="signupView" style="display:none;position:fixed;inset:0;background:#0D0D0D;z-index:200;align-items:center;justify-content:center;overflow-y:auto">
+  <div style="background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:8px;padding:2.5rem;width:100%;max-width:420px;margin:1rem;box-sizing:border-box">
+    <div style="font-family:var(--font-display);font-size:2rem;letter-spacing:.15em;color:var(--mat-gold);text-align:center;margin-bottom:.25rem">BJJ MAT TIMER</div>
+    <div style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.3em;color:var(--mat-muted);text-align:center;margin-bottom:2rem;text-transform:uppercase">Start your 30-day free trial</div>
+    <div id="signupForm">
+      <div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1.25rem">
+        <div>
+          <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Your Name</label>
+          <input type="text" id="signupName" placeholder="Jane Smith" autocomplete="name"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;box-sizing:border-box;transition:border-color .15s"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+            onkeydown="if(event.key==='Enter')document.getElementById('signupGymName').focus()">
+        </div>
+        <div>
+          <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Gym Name</label>
+          <input type="text" id="signupGymName" placeholder="Control BJJ" autocomplete="organization"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;box-sizing:border-box;transition:border-color .15s"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+            onkeydown="if(event.key==='Enter')document.getElementById('signupEmail').focus()">
+        </div>
+        <div>
+          <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Email</label>
+          <input type="email" id="signupEmail" placeholder="you@yourgym.com" autocomplete="email"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;box-sizing:border-box;transition:border-color .15s"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+            onkeydown="if(event.key==='Enter')submitSignup()">
+        </div>
+      </div>
+      <button id="signupBtn" class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:.85rem;margin-bottom:.75rem" onclick="submitSignup()">Start Free Trial</button>
+      <div id="signupError" style="display:none;color:var(--mat-red);font-family:var(--font-ui);font-size:.85rem;text-align:center;margin-bottom:.75rem"></div>
+      <div style="text-align:center;font-family:var(--font-ui);font-size:.78rem;color:var(--mat-muted)">
+        <button type="button" onclick="backToMarketing()" style="background:none;border:none;color:var(--mat-muted);font-family:var(--font-ui);font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0">← Back</button>
+        &nbsp;·&nbsp; Already have an account? &nbsp;<button type="button" onclick="showLogin()" style="background:none;border:none;color:var(--mat-gold);font-family:var(--font-ui);font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0">Sign in</button>
+      </div>
+    </div>
+    <div id="signupSuccess" style="display:none;text-align:center;padding:1rem 0">
+      <div style="font-size:3rem;margin-bottom:1rem;color:var(--mat-gold)">✓</div>
+      <div style="font-family:var(--font-ui);font-size:1.1rem;font-weight:700;color:var(--mat-text);margin-bottom:.75rem">Check your email!</div>
+      <div style="font-family:var(--font-ui);font-size:.9rem;color:var(--mat-muted);line-height:1.65">We sent you a link to set your password and access your gym. It may take a minute to arrive.</div>
     </div>
   </div>
 </div>
@@ -1202,7 +1247,68 @@ async function signOut() {
 
 function showLogin() {
   document.getElementById('marketingView').style.display = 'none';
+  document.getElementById('signupView').style.display = 'none';
   document.getElementById('loginView').style.display = 'flex';
+}
+
+function showSignup() {
+  document.getElementById('marketingView').style.display = 'none';
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('signupForm').style.display = 'block';
+  document.getElementById('signupSuccess').style.display = 'none';
+  document.getElementById('signupError').style.display = 'none';
+  document.getElementById('signupName').value = '';
+  document.getElementById('signupGymName').value = '';
+  document.getElementById('signupEmail').value = '';
+  document.getElementById('signupView').style.display = 'flex';
+  setTimeout(() => document.getElementById('signupName').focus(), 50);
+}
+
+function backToMarketing() {
+  document.getElementById('signupView').style.display = 'none';
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('marketingView').style.display = 'flex';
+}
+
+async function submitSignup() {
+  const name     = document.getElementById('signupName').value.trim();
+  const gymName  = document.getElementById('signupGymName').value.trim();
+  const email    = document.getElementById('signupEmail').value.trim();
+  const errEl    = document.getElementById('signupError');
+  const btn      = document.getElementById('signupBtn');
+
+  errEl.style.display = 'none';
+
+  if (!name || !gymName || !email) {
+    errEl.textContent = 'Please fill in all fields.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  try {
+    const res  = await fetch('/api/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, gymName, email }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error || 'Something went wrong. Please try again.';
+      errEl.style.display = 'block';
+    } else {
+      document.getElementById('signupForm').style.display = 'none';
+      document.getElementById('signupSuccess').style.display = 'block';
+    }
+  } catch (e) {
+    errEl.textContent = 'Network error. Please check your connection and try again.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Start Free Trial';
+  }
 }
 
 // ─── ACCOUNT MODAL ────────────────────────────────────────────────
