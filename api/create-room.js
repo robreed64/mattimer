@@ -12,7 +12,7 @@ function makeCode() {
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
@@ -30,7 +30,7 @@ module.exports = async function handler(req, res) {
   let gymId;
 
   if (isAdmin) {
-    const { roomId } = req.body || {};
+    const roomId = (req.method === 'GET' ? req.query : req.body || {}).roomId;
     if (!roomId) return res.status(400).json({ error: 'roomId required' });
     const { data: gym } = await admin.from('gyms').select('id').eq('room_code', roomId).single();
     if (!gym) return res.status(404).json({ error: 'Gym not found for that room code' });
@@ -45,6 +45,15 @@ module.exports = async function handler(req, res) {
       return res.status(403).json({ error: 'Only gym owners can manage rooms' });
     }
     gymId = membership.gym_id;
+  }
+
+  if (req.method === 'GET') {
+    const { data: rooms } = await admin
+      .from('gym_rooms')
+      .select('id, name, room_code')
+      .eq('gym_id', gymId)
+      .order('created_at');
+    return res.status(200).json({ rooms: rooms || [] });
   }
 
   if (req.method === 'POST') {

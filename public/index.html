@@ -1665,8 +1665,12 @@ async function regenerateTvCode(slot) {
 
 // ─── MULTI-ROOM MANAGEMENT ────────────────────────────────────────
 async function loadRoomsList() {
-  if (!_gymId) return;
-  const { data: rooms } = await _supabase.from('gym_rooms').select('id, name, room_code').eq('gym_id', _gymId).order('created_at');
+  const { data: { session } } = await _supabase.auth.getSession();
+  const res = await fetch(`/api/create-room?roomId=${encodeURIComponent(roomId)}`, {
+    headers: { 'Authorization': 'Bearer ' + session.access_token },
+  });
+  if (!res.ok) return;
+  const { rooms } = await res.json();
   const list = document.getElementById('roomsList');
   if (!list) return;
   let html = `<div style="display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;background:var(--mat-dark);border-radius:4px;border:1px solid var(--mat-border)">
