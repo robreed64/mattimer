@@ -66,7 +66,7 @@ module.exports = async function handler(req, res) {
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
-      line_items: [{ price: process.env.STRIPE_PRICE_KEY, quantity: 1 }],
+      line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
       success_url: `${SITE_URL}${roomId ? `?room=${roomId}` : ''}#checkout=success`,
       cancel_url:  `${SITE_URL}${roomId ? `?room=${roomId}` : ''}`,
       subscription_data: { metadata: { gym_id: gymId } },
