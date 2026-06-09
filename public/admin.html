@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <script src="/supabase-config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -102,7 +102,11 @@
     </div>
     <div class="form-group" style="margin-bottom:1.25rem">
       <label>Password</label>
-      <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')adminLogin()">
+      <div style="display:flex;align-items:center;gap:.5rem">
+        <input type="password" id="loginPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')adminLogin()" style="flex:1;min-width:0">
+        <button type="button" onclick="togglePw('loginPass',this)" tabindex="-1"
+          style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:.9rem;padding:.5rem .6rem;line-height:1;white-space:nowrap">👁</button>
+      </div>
     </div>
     <button class="btn btn-gold" style="width:100%" onclick="adminLogin()">Sign In</button>
     <div class="login-error" id="loginError">Invalid email or password.</div>
@@ -163,21 +167,18 @@
         <div id="addUserForm" class="add-form" style="display:none">
           <div class="form-row">
             <div class="form-group">
+              <label>Name</label>
+              <input type="text" id="newUserName" placeholder="Jane Smith">
+            </div>
+            <div class="form-group">
               <label>Email</label>
               <input type="email" id="newUserEmail" placeholder="owner@gym.com">
             </div>
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label>Gym</label>
               <select id="newUserGym"><option value="">Select a gym…</option></select>
-            </div>
-          </div>
-          <div class="form-row single">
-            <div class="form-group">
-              <label>Role</label>
-              <select id="newUserRole">
-                <option value="owner">Owner</option>
-                <option value="coach">Coach</option>
-              </select>
             </div>
           </div>
           <div class="form-actions">
@@ -194,8 +195,8 @@
           </div>
         </div>
         <table>
-          <thead><tr><th>Email</th><th>Gym</th><th>Role</th><th></th></tr></thead>
-          <tbody id="userTableBody"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+          <thead><tr><th>Name</th><th>Email</th><th>Gym</th><th>Settings Access</th><th></th></tr></thead>
+          <tbody id="userTableBody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -205,9 +206,22 @@
 <div id="toast"></div>
 
 <script>
-const supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
+let supabase;
+try {
+  supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_PUBLISHABLE_KEY);
+} catch (e) {
+  document.getElementById('loginError').textContent = 'Failed to load auth library: ' + e.message;
+  document.getElementById('loginError').style.display = 'block';
+}
 
 let gymsCache = [];
+
+function togglePw(inputId, btn) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.type = el.type === 'password' ? 'text' : 'password';
+  btn.textContent = el.type === 'text' ? '🙈' : '👁';
+}
 
 // ─── AUTH ─────────────────────────────────────────────────────────
 
@@ -217,17 +231,24 @@ async function adminLogin() {
   const errEl = document.getElementById('loginError');
   errEl.style.display = 'none';
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-  if (error) { errEl.style.display = 'block'; return; }
+  if (!supabase) { errEl.textContent = 'Auth not initialized.'; errEl.style.display = 'block'; return; }
 
-  const isAdmin = data.user.app_metadata?.role === 'admin';
-  if (!isAdmin) {
-    errEl.textContent = 'This account does not have admin access.';
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+
+    const isAdmin = data.user.app_metadata?.role === 'admin';
+    if (!isAdmin) {
+      errEl.textContent = 'This account does not have admin access.';
+      errEl.style.display = 'block';
+      await supabase.auth.signOut();
+      return;
+    }
+    showApp();
+  } catch (e) {
+    errEl.textContent = 'Error: ' + e.message;
     errEl.style.display = 'block';
-    await supabase.auth.signOut();
-    return;
   }
-  showApp();
 }
 
 async function adminLogout() {
@@ -292,7 +313,10 @@ function renderGymTable() {
       <td style="font-family:monospace;letter-spacing:.15em;color:var(--gold)">${esc(g.room_code)}</td>
       <td>${owners}</td>
       <td>${coaches}</td>
-      <td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="deleteGym('${g.id}','${esc(g.name)}')">Remove</button></td>
+      <td style="text-align:right;display:flex;gap:.4rem;justify-content:flex-end">
+        <a class="btn btn-outline btn-sm" href="/?room=${esc(g.room_code)}" target="_blank">Enter</a>
+        <button class="btn btn-danger btn-sm" onclick="deleteGym('${g.id}','${esc(g.name)}')">Remove</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -338,7 +362,7 @@ async function deleteGym(id, name) {
 async function loadUsers() {
   const { data, error } = await supabase
     .from('gym_users')
-    .select('id, role, user_id, gyms(id, name), auth_users_view(email)')
+    .select('id, role, user_id, name, email, gyms(id, name)')
     .order('created_at', { ascending: false });
 
   if (error) { toast('Error loading users: ' + error.message); return; }
@@ -347,13 +371,24 @@ async function loadUsers() {
 
 function renderUserTable(rows) {
   const tbody = document.getElementById('userTableBody');
-  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">No users yet.</td></tr>'; return; }
-  tbody.innerHTML = rows.map(r => `<tr>
-    <td>${esc(r.auth_users_view?.email || r.user_id)}</td>
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No users yet.</td></tr>'; return; }
+  tbody.innerHTML = rows.map(r => {
+    const hasSettings = r.role === 'owner';
+    const settingsLabel = hasSettings
+      ? '<span style="color:var(--gold);font-weight:600">&#10003; Enabled</span>'
+      : '<span style="color:var(--muted)">— Off</span>';
+    const toggleLabel = hasSettings ? 'Revoke Settings' : 'Grant Settings';
+    return `<tr>
+    <td>${esc(r.name || '—')}</td>
+    <td>${esc(r.email || '—')}</td>
     <td>${esc(r.gyms?.name || '—')}</td>
-    <td><span class="badge badge-${r.role}">${r.role}</span></td>
-    <td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="removeUser('${r.id}')">Remove</button></td>
-  </tr>`).join('');
+    <td>${settingsLabel}</td>
+    <td style="text-align:right;display:flex;gap:.4rem;justify-content:flex-end">
+      <button class="btn btn-outline btn-sm" onclick="toggleSettings('${r.id}','${r.role}')">${toggleLabel}</button>
+      <button class="btn btn-danger btn-sm" onclick="removeUser('${r.id}')">Remove</button>
+    </td>
+  </tr>`;
+  }).join('');
 }
 
 function toggleAddUser() {
@@ -363,9 +398,9 @@ function toggleAddUser() {
 }
 
 async function createUser() {
+  const name  = document.getElementById('newUserName').value.trim();
   const email = document.getElementById('newUserEmail').value.trim();
   const gymId = document.getElementById('newUserGym').value;
-  const role  = document.getElementById('newUserRole').value;
 
   if (!email || !gymId) { toast('Email and gym are required'); return; }
 
@@ -373,12 +408,13 @@ async function createUser() {
   const res = await fetch('/api/create-user', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-    body: JSON.stringify({ email, gymId, role }),
+    body: JSON.stringify({ name, email, gymId }),
   });
   const data = await res.json();
   if (!data.ok) { toast('Error: ' + (data.error || 'Unknown error')); return; }
 
   toast('Invite created');
+  document.getElementById('newUserName').value  = '';
   document.getElementById('newUserEmail').value = '';
   document.getElementById('inviteLinkInput').value = data.inviteLink;
   document.getElementById('inviteLinkBox').style.display = 'block';
@@ -390,6 +426,14 @@ function copyInviteLink() {
   navigator.clipboard.writeText(input.value)
     .then(() => toast('Link copied!'))
     .catch(() => { input.select(); document.execCommand('copy'); toast('Link copied!'); });
+}
+
+async function toggleSettings(gymUserId, currentRole) {
+  const newRole = currentRole === 'owner' ? 'coach' : 'owner';
+  const { error } = await supabase.from('gym_users').update({ role: newRole }).eq('id', gymUserId);
+  if (error) { toast('Error: ' + error.message); return; }
+  toast(newRole === 'owner' ? 'Settings access granted' : 'Settings access removed');
+  await loadUsers();
 }
 
 async function removeUser(gymUserId) {

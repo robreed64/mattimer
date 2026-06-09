@@ -1,9 +1,9 @@
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL      = process.env.SUPABASE_URL;
-const SERVICE_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const PUBLISHABLE_KEY   = process.env.SUPABASE_PUBLISHABLE_KEY;
-const SITE_URL          = process.env.VERCEL_PROJECT_PRODUCTION_URL
+const SUPABASE_URL         = process.env.SUPABASE_URL;
+const SERVICE_KEY          = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const DEFAULT_INVITE_ROLE  = 'coach';
+const SITE_URL             = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : 'https://bjj-timer-gamma.vercel.app';
 
@@ -14,28 +14,26 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { email, gymId, role } = req.body;
-  if (!email || !gymId || !role) {
-    return res.status(400).json({ error: 'email, gymId, and role are required' });
-  }
-  if (!['owner', 'coach'].includes(role)) {
-    return res.status(400).json({ error: 'role must be owner or coach' });
+  const { name, email, gymId } = req.body;
+  if (!email || !gymId) {
+    return res.status(400).json({ error: 'email and gymId are required' });
   }
 
-  // Verify the calling user's JWT
   const callerJwt = (req.headers.authorization || '').replace('Bearer ', '');
   if (!callerJwt) return res.status(401).json({ error: 'Not authenticated' });
 
-  const callerClient = createClient(SUPABASE_URL, PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${callerJwt}` } },
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
   });
-  const { data: { user: caller }, error: authErr } = await callerClient.auth.getUser();
-  if (authErr || !caller) return res.status(401).json({ error: 'Invalid session' });
+
+  // Verify caller JWT via admin client
+  const { data: { user: caller }, error: authErr } = await admin.auth.getUser(callerJwt);
+  if (authErr || !caller) return res.status(401).json({ error: 'Invalid session: ' + (authErr?.message || 'no user') });
 
   const isAdmin = caller.app_metadata?.role === 'admin';
   if (!isAdmin) {
-    if (role !== 'coach') return res.status(403).json({ error: 'Only admins can create owners' });
-    const { data: membership } = await callerClient
+    // Gym owners can invite anyone to their gym
+    const { data: membership } = await admin
       .from('gym_users')
       .select('role')
       .eq('gym_id', gymId)
@@ -46,11 +44,7 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  // Generate an invite link — returns a token the user clicks to set their password
+  // Generate invite link
   const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
     type: 'invite',
     email,
@@ -60,10 +54,9 @@ module.exports = async function handler(req, res) {
 
   const userId = linkData.user.id;
 
-  // Assign user to gym
   const { error: assignErr } = await admin
     .from('gym_users')
-    .insert({ user_id: userId, gym_id: gymId, role });
+    .insert({ user_id: userId, gym_id: gymId, role: DEFAULT_INVITE_ROLE, email, name: name || null });
 
   if (assignErr) {
     await admin.auth.admin.deleteUser(userId);

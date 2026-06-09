@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <script src="/supabase-config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase.js"></script>
 <script src="/partykit-config.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -57,22 +57,7 @@
   .landing-title { font-family: var(--font-display); font-size: clamp(3rem,8vw,6rem); letter-spacing: .05em; color: var(--mat-text); text-align: center; line-height: .9; margin-bottom: .5rem; }
   .landing-sub { font-family: var(--font-ui); font-size: 1.1rem; letter-spacing: .3em; color: var(--mat-muted); text-transform: uppercase; margin-bottom: 3rem; }
 
-  /* Network address — fixed bottom bar, shows once */
-  .network-footer {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    background: var(--mat-panel);
-    border-top: 1px solid var(--mat-border);
-    padding: .6rem 1.5rem;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    gap: .75rem;
-    z-index: 10;
-  }
-  .network-footer.visible { display: flex; }
-  .network-footer-label { font-family: var(--font-ui); font-size: .7rem; letter-spacing: .2em; color: var(--mat-muted); text-transform: uppercase; }
-  .network-footer-url { font-family: var(--font-ui); font-size: .95rem; letter-spacing: .08em; color: var(--mat-gold); font-weight: 700; }
+
   .mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; width: 100%; max-width: 600px; margin-bottom: 2rem; }
   .mode-card { background: var(--mat-panel); border: 1px solid var(--mat-border); border-radius: 4px; padding: 2rem 1.5rem; cursor: pointer; transition: all .2s; text-align: center; position: relative; overflow: hidden; }
   .mode-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--mat-gold); transform: scaleX(0); transition: transform .2s; }
@@ -503,14 +488,21 @@
       </div>
       <div>
         <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Password</label>
-        <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password"
-          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;transition:border-color .15s"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
-          onkeydown="if(event.key==='Enter')signIn()">
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password"
+            style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;transition:border-color .15s"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+            onkeydown="if(event.key==='Enter')signIn()">
+          <button type="button" onclick="togglePw('authPass',this)" tabindex="-1"
+            style="flex-shrink:0;background:none;border:1px solid var(--mat-border);border-radius:4px;cursor:pointer;color:var(--mat-muted);font-size:.9rem;padding:.6rem .65rem;line-height:1">👁</button>
+        </div>
       </div>
     </div>
     <button class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:.85rem" onclick="signIn()">Sign In</button>
     <div id="authError" style="display:none;color:var(--mat-red);font-family:var(--font-ui);font-size:.85rem;text-align:center;margin-top:.75rem">Invalid email or password.</div>
+    <div style="text-align:center;margin-top:.9rem">
+      <button type="button" onclick="forgotPassword()" style="background:none;border:none;color:var(--mat-muted);font-family:var(--font-ui);font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0">Forgot password?</button>
+    </div>
   </div>
 </div>
 
@@ -541,6 +533,13 @@
         onkeydown="if(event.key==='Enter')joinRoom()">
       <button class="btn btn-outline" onclick="joinRoom()">Join</button>
     </div>
+  </div>
+
+  <!-- Demo mode banner -->
+  <div id="demoBanner" style="display:none;align-items:center;gap:.75rem;margin-bottom:1rem;background:rgba(212,160,23,.1);border:1px solid var(--mat-gold);border-radius:4px;padding:.65rem 1rem;width:100%;max-width:680px;box-sizing:border-box">
+    <span style="font-family:var(--font-ui);font-size:.8rem;color:var(--mat-gold);font-weight:700;letter-spacing:.1em">DEMO MODE</span>
+    <span style="font-family:var(--font-ui);font-size:.8rem;color:var(--mat-muted);flex:1">Settings and profiles won't be saved. Try all features free.</span>
+    <a href="mailto:robreed64@gmail.com?subject=BJJ Timer signup" style="font-family:var(--font-ui);font-size:.75rem;color:var(--mat-gold);text-decoration:none;border:1px solid var(--mat-gold);border-radius:3px;padding:.25rem .6rem;white-space:nowrap;flex-shrink:0">Get Your Gym Set Up →</a>
   </div>
 
   <!-- Room code bar — shown when ?room= is in URL -->
@@ -581,6 +580,15 @@
       <div class="landing-tv-hint" id="landing-tv-hint-4">tap to connect</div>
       <div class="landing-tv-status" id="landing-tv-status-4"></div>
     </div>
+  </div>
+
+  <!-- Onboarding checklist — shown to new gym owners until dismissed -->
+  <div id="onboardingCard" style="display:none;width:100%;max-width:680px;background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:6px;padding:1rem 1.25rem;margin-top:.5rem;box-sizing:border-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+      <span style="font-family:var(--font-ui);font-size:.75rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--mat-muted)">Getting Started</span>
+      <button onclick="dismissOnboarding()" style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-family:var(--font-ui);font-size:.7rem;letter-spacing:.1em;padding:.15rem .4rem;border-radius:3px;border:1px solid var(--mat-border)">Dismiss</button>
+    </div>
+    <div id="onboardingSteps" style="display:flex;flex-direction:column;gap:.5rem"></div>
   </div>
 
 </div>
@@ -671,7 +679,7 @@
     <div class="modal-body" style="gap:.75rem">
       <div id="coachList" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:.5rem"></div>
       <div style="border-top:1px solid var(--mat-border);padding-top:.75rem">
-        <div style="font-family:var(--font-ui);font-size:.8rem;letter-spacing:.1em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.5rem">Add Coach</div>
+        <div style="font-family:var(--font-ui);font-size:.8rem;letter-spacing:.1em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.5rem">Add Instructor</div>
         <div style="display:flex;flex-direction:column;gap:.5rem">
           <input type="email" id="newCoachEmail" placeholder="coach@gym.com" autocomplete="off"
             style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.65rem .9rem;outline:none;width:100%;transition:border-color .15s"
@@ -689,7 +697,50 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeCoachesModal()">Close</button>
-      <button class="btn btn-gold" onclick="addCoach()">Add Coach</button>
+      <button class="btn btn-gold" onclick="addCoach()">Add Instructor</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ACCOUNT MODAL ────────────────────────────────────────────── -->
+<div id="accountModal" class="modal-backdrop" style="display:none" onclick="closeAccountModal(event)">
+  <div class="modal-box" style="max-width:400px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">Account</span>
+      <button class="modal-close" onclick="closeAccountModal()">✕</button>
+    </div>
+    <div class="modal-body" style="gap:1rem">
+      <div>
+        <div style="font-family:var(--font-ui);font-size:.7rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.3rem">Signed in as</div>
+        <div id="accountEmailDisplay" style="font-family:var(--font-ui);font-size:.9rem;color:var(--mat-text)"></div>
+      </div>
+      <div style="border-top:1px solid var(--mat-border);padding-top:1rem">
+        <div style="font-family:var(--font-ui);font-size:.7rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.65rem">Change Password</div>
+        <div style="display:flex;flex-direction:column;gap:.5rem">
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <input type="password" id="acctNewPw" placeholder="New password (min 8 chars)"
+              style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;transition:border-color .15s"
+              onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+            <button type="button" onclick="togglePw('acctNewPw',this)" tabindex="-1"
+              style="flex-shrink:0;background:none;border:1px solid var(--mat-border);border-radius:4px;cursor:pointer;color:var(--mat-muted);font-size:.85rem;padding:.5rem .55rem;line-height:1">👁</button>
+          </div>
+          <input type="password" id="acctConfirmPw" placeholder="Confirm new password"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;width:100%;transition:border-color .15s"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+            onkeydown="if(event.key==='Enter')changePassword()">
+          <div id="acctPwError" style="display:none;color:var(--mat-red);font-family:var(--font-ui);font-size:.8rem"></div>
+          <button class="btn btn-gold" style="width:100%" onclick="changePassword()">Update Password</button>
+        </div>
+      </div>
+    </div>
+    <div id="accountBillingSection" style="display:none;border-top:1px solid var(--mat-border);padding-top:1rem">
+      <div style="font-family:var(--font-ui);font-size:.7rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.5rem">Subscription</div>
+      <div id="accountBillingStatus" style="font-family:var(--font-ui);font-size:.9rem;color:var(--mat-text);margin-bottom:.5rem"></div>
+      <div id="accountBillingBtn"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-red" style="font-size:.8rem;padding:.5rem 1rem" onclick="signOut()">Sign Out</button>
+      <button class="btn btn-outline" onclick="closeAccountModal()">Close</button>
     </div>
   </div>
 </div>
@@ -751,7 +802,7 @@
     </div>
     <div style="display:flex;align-items:center;gap:.5rem">
       <button class="btn btn-outline" id="coachesBtn" style="font-size:.75rem;padding:.3rem .75rem;display:none" onclick="openCoachesModal()">Team</button>
-      <button class="btn btn-outline" style="font-size:.75rem;padding:.3rem .75rem" onclick="signOut()">Sign Out</button>
+      <button class="btn btn-outline" style="font-size:.75rem;padding:.3rem .75rem" onclick="openAccountModal()">Account</button>
     </div>
   </div>
 
@@ -975,14 +1026,6 @@
       <div class="modal-field"><label>App Name</label><input type="text" id="bName" placeholder="BJJ Mat Timer" maxlength="40"></div>
       <div class="modal-field"><label>Tagline</label><input type="text" id="bTagline" placeholder="Competition · Training · Sparring" maxlength="60"></div>
       <div class="modal-field">
-        <label>Network Name <span style="color:var(--mat-muted);font-weight:400">(e.g. <code style="color:var(--mat-gold)">bjjtimer</code> → bjjtimer.local)</span></label>
-        <input type="text" id="bMdnsName" placeholder="bjjtimer" maxlength="30"
-          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.6rem .75rem;outline:none;width:100%;transition:border-color .2s"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
-          oninput="this.value=this.value.replace(/[^a-z0-9-]/gi,'-').toLowerCase()">
-        <span style="font-family:var(--font-ui);font-size:.7rem;color:var(--mat-muted);margin-top:.2rem">Requires app restart to take effect.</span>
-      </div>
-      <div class="modal-field">
         <label>Logo Imageel>Logo Image <span style="color:var(--mat-muted);font-weight:400">(PNG, JPG, SVG)</span></label>
         <div class="logo-upload-row">
           <div class="logo-preview" id="logoPreview">
@@ -1063,6 +1106,14 @@ const _supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPAB
 let _currentUser = null;
 let _gymRole     = null; // 'owner' | 'coach'
 let _gymId       = null;
+let _gymSub      = null; // { status, trial_ends_at }
+
+function togglePw(inputId, btn) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.type = el.type === 'password' ? 'text' : 'password';
+  btn.textContent = el.type === 'text' ? '🙈' : '👁';
+}
 
 async function signIn() {
   const email = document.getElementById('authEmail').value.trim();
@@ -1075,25 +1126,242 @@ async function signIn() {
   await _afterAuth(data.user);
 }
 
+async function forgotPassword() {
+  const email = document.getElementById('authEmail').value.trim();
+  if (!email) { alert('Enter your email address first.'); return; }
+  const { error } = await _supabase.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  if (error) { alert('Error: ' + error.message); return; }
+  alert('Password reset link sent — check your email.');
+}
+
 async function signOut() {
   await _supabase.auth.signOut();
   _currentUser = null; _gymRole = null; _gymId = null;
-  window.location.href = location.pathname; // reload without ?room=
+  window.location.href = location.pathname;
+}
+
+// ─── ACCOUNT MODAL ────────────────────────────────────────────────
+function openAccountModal() {
+  document.getElementById('accountEmailDisplay').textContent = _currentUser?.email || '';
+  document.getElementById('acctNewPw').value = '';
+  document.getElementById('acctConfirmPw').value = '';
+  document.getElementById('acctPwError').style.display = 'none';
+
+  // Billing section — only for gym owners
+  const billingSection = document.getElementById('accountBillingSection');
+  if (_gymRole === 'owner' && _gymSub) {
+    billingSection.style.display = 'block';
+    const { status, trial_ends_at } = _gymSub;
+    const trialEnd = trial_ends_at ? new Date(trial_ends_at) : null;
+    const now = new Date();
+    let statusHtml = '', btnHtml = '';
+    if (status === 'active' || status === 'trialing') {
+      statusHtml = '<span style="color:#2ecc71">&#10003; Active</span>';
+      btnHtml = `<button class="btn btn-outline" style="font-size:.8rem;padding:.4rem .9rem;width:100%" onclick="openBillingPortal()">Manage Billing</button>`;
+    } else if (status === 'trial' && trialEnd && trialEnd > now) {
+      const days = Math.ceil((trialEnd - now) / 86400000);
+      statusHtml = `Free trial — <span style="color:var(--mat-gold)">${days} day${days !== 1 ? 's' : ''} remaining</span>`;
+      btnHtml = `<button class="btn btn-gold" style="font-size:.8rem;padding:.4rem .9rem;width:100%" onclick="startCheckout()">Subscribe Now</button>`;
+    } else if (status === 'past_due' || status === 'unpaid') {
+      statusHtml = '<span style="color:var(--mat-red)">Payment issue — please update your card</span>';
+      btnHtml = `<button class="btn btn-gold" style="font-size:.8rem;padding:.4rem .9rem;width:100%" onclick="openBillingPortal()">Update Payment</button>`;
+    } else {
+      statusHtml = '<span style="color:var(--mat-muted)">No active subscription</span>';
+      btnHtml = `<button class="btn btn-gold" style="font-size:.8rem;padding:.4rem .9rem;width:100%" onclick="startCheckout()">Start Subscription</button>`;
+    }
+    document.getElementById('accountBillingStatus').innerHTML = `<span style="font-family:var(--font-ui);font-size:.85rem">${statusHtml}</span>`;
+    document.getElementById('accountBillingBtn').innerHTML = btnHtml;
+  } else {
+    billingSection.style.display = 'none';
+  }
+
+  document.getElementById('accountModal').style.display = 'flex';
+}
+
+function closeAccountModal(e) {
+  if (e && e.target !== document.getElementById('accountModal')) return;
+  document.getElementById('accountModal').style.display = 'none';
+}
+
+async function changePassword() {
+  const pw  = document.getElementById('acctNewPw').value;
+  const pw2 = document.getElementById('acctConfirmPw').value;
+  const errEl = document.getElementById('acctPwError');
+  errEl.style.display = 'none';
+  if (pw.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display = 'block'; return; }
+  if (pw !== pw2)    { errEl.textContent = 'Passwords do not match.'; errEl.style.display = 'block'; return; }
+  const { error } = await _supabase.auth.updateUser({ password: pw });
+  if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
+  toast('Password updated');
+  closeAccountModal();
+}
+
+// ─── BILLING ──────────────────────────────────────────────────────
+function _checkSubscription() {
+  if (!_gymSub || _gymRole !== 'owner') return;
+  const { status, trial_ends_at } = _gymSub;
+  const trialEnd = trial_ends_at ? new Date(trial_ends_at) : null;
+  const now = new Date();
+  const trialActive = status === 'trial' && trialEnd && trialEnd > now;
+  const needsUpgrade = (status === 'trial' && (!trialEnd || trialEnd <= now))
+    || status === 'canceled' || status === 'past_due' || status === 'unpaid';
+
+  if (trialActive) {
+    const days = Math.ceil((trialEnd - now) / 86400000);
+    const bar = document.getElementById('roomBar');
+    if (bar && !bar.querySelector('.trial-badge')) {
+      const badge = document.createElement('span');
+      badge.className = 'trial-badge';
+      badge.style.cssText = 'font-family:var(--font-ui);font-size:.7rem;letter-spacing:.1em;color:var(--mat-muted);margin-left:auto;padding:.15rem .4rem;border:1px solid var(--mat-border);border-radius:3px;white-space:nowrap';
+      badge.textContent = `Trial: ${days}d left`;
+      bar.appendChild(badge);
+    }
+  }
+
+  if (needsUpgrade) {
+    _showUpgradeModal(status === 'trial' ? 'Your free trial has ended.' : 'Your subscription is inactive.');
+  }
+}
+
+function _showUpgradeModal(reason) {
+  // Remove any existing paywall modal
+  document.getElementById('paywallModal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'paywallModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML = `
+    <div style="background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:8px;padding:2.5rem;width:100%;max-width:380px;text-align:center">
+      <div style="font-family:var(--font-display);font-size:1.8rem;letter-spacing:.1em;color:var(--mat-gold);margin-bottom:.5rem">BJJ MAT TIMER</div>
+      <div style="font-family:var(--font-ui);font-size:.9rem;color:var(--mat-muted);margin-bottom:1.5rem">${reason}</div>
+      <button class="btn btn-gold" style="width:100%;font-size:1rem;padding:.85rem;margin-bottom:.75rem" onclick="startCheckout()">Start Subscription</button>
+      <button class="btn btn-outline" style="width:100%;font-size:.85rem;padding:.65rem" onclick="signOut()">Sign Out</button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function startCheckout() {
+  const { data: { session } } = await _supabase.auth.getSession();
+  const res = await fetch('/api/create-checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+    body: JSON.stringify({ roomId }),
+  });
+  const data = await res.json();
+  if (!data.url) { toast('Error: ' + (data.error || 'Could not start checkout')); return; }
+  window.location.href = data.url;
+}
+
+async function openBillingPortal() {
+  const { data: { session } } = await _supabase.auth.getSession();
+  const res = await fetch('/api/billing-portal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+  });
+  const data = await res.json();
+  if (!data.url) { toast('Error: ' + (data.error || 'Could not open billing portal')); return; }
+  window.location.href = data.url;
+}
+
+// ─── DEMO MODE ────────────────────────────────────────────────────
+function _enterDemoMode() {
+  _gymRole = 'owner';
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('roomBar').style.display = 'flex';
+  document.getElementById('demoBanner').style.display = 'flex';
+  const codeEl = document.getElementById('roomCodeDisplay');
+  if (codeEl) codeEl.textContent = 'Demo';
+  fetch(partyApiUrl('/api/config')).then(r => r.json()).then(cfg => {
+    tvCodes  = cfg.tvCodes;
+    branding = { ...branding, ...cfg.branding };
+    applyBranding();
+  }).catch(() => {});
+}
+
+// ─── ONBOARDING CHECKLIST ─────────────────────────────────────────
+async function showOnboardingIfNeeded() {
+  if (_gymRole !== 'owner' || !_gymId) return;
+  const key = 'onboarding_dismissed_' + _gymId;
+  if (localStorage.getItem(key)) return;
+
+  // Check how many team members exist (excluding self)
+  const { data: members } = await _supabase
+    .from('gym_users')
+    .select('id')
+    .eq('gym_id', _gymId)
+    .neq('user_id', _currentUser.id);
+
+  const hasName  = branding.appName && branding.appName !== 'BJJ Mat Timer';
+  const hasLogo  = !!branding.logoDataUrl;
+  const hasTeam  = members && members.length > 0;
+
+  // Don't show if everything is done
+  if (hasName && hasLogo && hasTeam) return;
+
+  const steps = [
+    { done: hasName,  text: 'Name your gym',          action: 'openBrandingModal()',  hint: 'Set your gym name and tagline in branding settings' },
+    { done: hasLogo,  text: 'Upload your logo',        action: 'openBrandingModal()',  hint: 'Add your gym logo for the display screens' },
+    { done: hasTeam,  text: 'Invite your first instructor', action: 'openCoachesModal()', hint: 'Add a coach or instructor to your team' },
+  ];
+
+  const stepsHtml = steps.map(s => `
+    <div style="display:flex;align-items:center;gap:.75rem;padding:.4rem 0;border-bottom:1px solid var(--mat-border)">
+      <span style="font-size:1rem;flex-shrink:0">${s.done ? '✅' : '⬜'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-family:var(--font-ui);font-size:.85rem;color:${s.done ? 'var(--mat-muted)' : 'var(--mat-text)'};${s.done ? 'text-decoration:line-through' : ''}">${s.text}</div>
+        ${!s.done ? `<div style="font-family:var(--font-ui);font-size:.72rem;color:var(--mat-muted)">${s.hint}</div>` : ''}
+      </div>
+      ${!s.done ? `<button onclick="${s.action};document.getElementById('onboardingCard').style.display='none'" style="background:none;border:1px solid var(--mat-border);border-radius:3px;color:var(--mat-gold);font-family:var(--font-ui);font-size:.72rem;padding:.2rem .5rem;cursor:pointer;flex-shrink:0">Do it →</button>` : ''}
+    </div>`).join('');
+
+  document.getElementById('onboardingSteps').innerHTML = stepsHtml;
+  document.getElementById('onboardingCard').style.display = 'block';
+}
+
+function dismissOnboarding() {
+  if (_gymId) localStorage.setItem('onboarding_dismissed_' + _gymId, '1');
+  document.getElementById('onboardingCard').style.display = 'none';
 }
 
 async function _afterAuth(user) {
   _currentUser = user;
 
-  // Admin → redirect to admin panel
-  if (user.app_metadata?.role === 'admin') {
+  const isAdmin = user.app_metadata?.role === 'admin';
+  const roomParam = new URLSearchParams(location.search).get('room');
+
+  // Admin without a specific room → go to admin panel
+  if (isAdmin && !roomParam) {
     window.location.href = '/admin.html';
+    return;
+  }
+
+  // Admin entering a specific gym → treat as owner
+  if (isAdmin && roomParam) {
+    _gymRole = 'owner';
+    roomId   = roomParam;
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('roomBar').style.display = 'flex';
+    const codeEl = document.getElementById('roomCodeDisplay');
+    if (codeEl) codeEl.textContent = roomParam;
+    // Show admin back-link in room bar
+    const bar = document.getElementById('roomBar');
+    if (bar && !bar.querySelector('.admin-back-link')) {
+      const link = document.createElement('a');
+      link.href = '/admin.html';
+      link.textContent = '← Admin';
+      link.className = 'admin-back-link';
+      link.style.cssText = 'font-family:var(--font-ui);font-size:.75rem;letter-spacing:.1em;color:var(--mat-gold);text-decoration:none;margin-left:auto;padding:.25rem .5rem;border:1px solid var(--mat-gold);border-radius:3px';
+      bar.appendChild(link);
+    }
+    document.getElementById('teamBtn')?.style.setProperty('display', 'inline-flex');
+    document.getElementById('brandingBtn')?.style.setProperty('display', 'inline-flex');
     return;
   }
 
   // Look up the user's gym
   const { data: membership } = await _supabase
     .from('gym_users')
-    .select('role, gym_id, gyms(room_code, name)')
+    .select('role, gym_id, gyms(room_code, name, subscription_status, trial_ends_at)')
     .eq('user_id', user.id)
     .single();
 
@@ -1107,6 +1375,7 @@ async function _afterAuth(user) {
   _gymRole = membership.role;
   _gymId   = membership.gym_id;
   roomId   = membership.gyms.room_code;
+  _gymSub  = { status: membership.gyms.subscription_status, trial_ends_at: membership.gyms.trial_ends_at };
 
   document.getElementById('loginView').style.display = 'none';
 
@@ -1127,6 +1396,8 @@ async function _afterAuth(user) {
     branding = { ...branding, ...cfg.branding };
     applyBranding();
     restoreAudioSlots(cfg.audioSlots);
+    showOnboardingIfNeeded();
+    if (_gymRole === 'owner') _checkSubscription();
   }).catch(() => {});
 
   // Hide branding/settings gear for coaches
@@ -1137,6 +1408,12 @@ async function _afterAuth(user) {
 
 // Check session on every page load
 (async function initAuth() {
+  // Demo mode — skip auth entirely for ?room=demo
+  if (roomId?.toLowerCase() === 'demo') {
+    _enterDemoMode();
+    return;
+  }
+
   const hashParams = new URLSearchParams(location.hash.replace('#', ''));
   const tokenType   = hashParams.get('type');
   const accessToken = hashParams.get('access_token');
@@ -1162,6 +1439,12 @@ async function _afterAuth(user) {
   }
   await _afterAuth(session.user);
 
+  // Stripe checkout return
+  if (location.hash === '#checkout=success') {
+    history.replaceState(null, '', location.href.replace('#checkout=success', ''));
+    toast('Payment successful — your subscription is now active!');
+  }
+
   if (roomId) {
     document.getElementById('roomBar').style.display = 'flex';
     const el = document.getElementById('roomCodeDisplay');
@@ -1179,9 +1462,13 @@ function _showSetPassword() {
       <div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1.25rem">
         <div>
           <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">New Password</label>
-          <input type="password" id="setPassInput" placeholder="Min 8 characters"
-            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%"
-            onkeydown="if(event.key==='Enter')setNewPassword()">
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <input type="password" id="setPassInput" placeholder="Min 8 characters"
+              style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none"
+              onkeydown="if(event.key==='Enter')setNewPassword()">
+            <button type="button" onclick="togglePw('setPassInput',this)" tabindex="-1"
+              style="flex-shrink:0;background:none;border:1px solid var(--mat-border);border-radius:4px;cursor:pointer;color:var(--mat-muted);font-size:.9rem;padding:.6rem .65rem;line-height:1">👁</button>
+          </div>
         </div>
       </div>
       <button class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:.85rem" onclick="setNewPassword()">Set Password &amp; Sign In</button>
@@ -1211,11 +1498,14 @@ function copyRoomLink() {
     .catch(() => prompt('Room link:', url));
 }
 
+function changeRoom() {
+  location.href = location.pathname;
+}
+
 // ─── COACHES PANEL (owner only) ───────────────────────────────────
 async function openCoachesModal() {
   document.getElementById('coachesModal').style.display = 'flex';
   document.getElementById('newCoachEmail').value = '';
-  document.getElementById('newCoachPass').value  = '';
   await loadCoaches();
 }
 
@@ -1230,20 +1520,39 @@ async function loadCoaches() {
 
   const { data, error } = await _supabase
     .from('gym_users')
-    .select('id, role, user_id')
+    .select('id, role, user_id, name, email')
     .eq('gym_id', _gymId)
-    .eq('role', 'coach');
+    .neq('user_id', _currentUser?.id);
 
   if (error || !data?.length) {
-    list.innerHTML = '<div style="color:var(--mat-muted);font-family:var(--font-ui);font-size:.85rem;padding:.25rem 0">No coaches added yet.</div>';
+    list.innerHTML = '<div style="color:var(--mat-muted);font-family:var(--font-ui);font-size:.85rem;padding:.25rem 0">No team members yet.</div>';
     return;
   }
 
-  list.innerHTML = data.map(c => `
-    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;padding:.5rem .75rem">
-      <span style="font-family:var(--font-ui);font-size:.9rem">${escHtml(c.user_id)}</span>
-      <button onclick="removeCoach('${c.id}')" style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-size:.8rem;padding:.2rem .4rem" title="Remove">✕</button>
-    </div>`).join('');
+  list.innerHTML = data.map(c => {
+    const label = c.name ? `${escHtml(c.name)} <span style="color:var(--mat-muted);font-size:.8rem">${escHtml(c.email || '')}</span>` : escHtml(c.email || c.user_id);
+    const hasSettings = c.role === 'owner';
+    const settingsBtnLabel = hasSettings ? '⚙ Settings On' : '⚙ Settings Off';
+    const settingsBtnStyle = hasSettings
+      ? 'border-color:var(--mat-gold);color:var(--mat-gold)'
+      : 'border-color:var(--mat-border);color:var(--mat-muted)';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;padding:.5rem .75rem;gap:.5rem">
+      <span style="font-family:var(--font-ui);font-size:.9rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</span>
+      <div style="display:flex;gap:.4rem;flex-shrink:0">
+        <button onclick="toggleMemberSettings('${c.id}','${c.role}')" style="background:none;border:1px solid;border-radius:3px;${settingsBtnStyle};font-family:var(--font-ui);font-size:.72rem;padding:.2rem .5rem;cursor:pointer">${settingsBtnLabel}</button>
+        <button onclick="removeCoach('${c.id}')" style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-size:.8rem;padding:.2rem .4rem" title="Remove">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleMemberSettings(gymUserId, currentRole) {
+  if (_gymRole !== 'owner') return;
+  const newRole = currentRole === 'owner' ? 'coach' : 'owner';
+  const { error } = await _supabase.from('gym_users').update({ role: newRole }).eq('id', gymUserId);
+  if (error) { toast('Error: ' + error.message); return; }
+  toast(newRole === 'owner' ? 'Settings access granted' : 'Settings access removed');
+  await loadCoaches();
 }
 
 async function addCoach() {
@@ -1254,7 +1563,7 @@ async function addCoach() {
   const res = await fetch('/api/create-user', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-    body: JSON.stringify({ email, gymId: _gymId, role: 'coach' }),
+    body: JSON.stringify({ email, gymId: _gymId }),
   });
   const data = await res.json();
   if (!data.ok) { toast('Error: ' + (data.error || 'Unknown error')); return; }
@@ -1271,10 +1580,11 @@ function copyCoachInvite() {
 }
 
 async function removeCoach(gymUserId) {
-  if (!confirm('Remove this coach from your gym?')) return;
+  if (_gymRole !== 'owner') return;
+  if (!confirm('Remove this instructor from your gym?')) return;
   const { error } = await _supabase.from('gym_users').delete().eq('id', gymUserId);
   if (error) { toast('Error: ' + error.message); return; }
-  toast('Coach removed');
+  toast('Instructor removed');
   await loadCoaches();
 }
 
@@ -1401,8 +1711,6 @@ function restoreAudioSlots(audioSlots) {
   }
 }
 
-function testBuzzer() { playBuzzer(); }
-
 // ─── LANDING ──────────────────────────────────────────────────────
 // Fetch config (TV codes + branding) on load — only when room is known
 if (roomId) {
@@ -1418,7 +1726,14 @@ if (roomId) {
 let profiles = [];
 let _pendingProfile = null;
 
-function promptControllerPassword() { openProfilePicker(); }
+function promptControllerPassword() {
+  if (_currentUser?.app_metadata?.role === 'admin') {
+    myCtrlName = _currentUser.email || 'Admin';
+    startController();
+    return;
+  }
+  openProfilePicker();
+}
 
 function loadProfiles() {
   if (!roomId) { profiles = []; return Promise.resolve(); }
@@ -1568,14 +1883,6 @@ function closePasswordModal() {
   });
 }
 function submitPassword() { submitPin(); }
-
-// ─── SESSION NAME ─────────────────────────────────────────────────
-function openSessionModal() {
-  const input = document.getElementById('sessionNameInput');
-  if (input) { input.value = myCtrlName || ''; }
-  document.getElementById('sessionModal').style.display = 'flex';
-  setTimeout(() => input && input.focus(), 80);
-}
 
 // ─── SESSION NAME ─────────────────────────────────────────────────
 function openSessionModal() {
@@ -2214,8 +2521,6 @@ function applyBranding() {
 function openBrandingModal() {
   document.getElementById('bName').value     = branding.appName || '';
   document.getElementById('bTagline').value  = branding.tagline || '';
-  [1,2,3,4].forEach(i => { const el = document.getElementById('bPin'+i); if (el) el.value = slotPins[i] || ''; });
-  document.getElementById('bMdnsName').value = branding.mdnsName || 'bjjtimer';
   const logo = branding.logoDataUrl || '';
   const img = document.getElementById('logoPreviewImg'), def = document.getElementById('logoPreviewDefault');
   const bImg = document.getElementById('bPreviewImg'), bSvg = document.getElementById('bPreviewDefaultSvg');
@@ -2272,10 +2577,7 @@ async function saveBranding() {
   const logoInput = document.getElementById('logoUpload');
   branding.appName   = document.getElementById('bName').value.trim() || 'BJJ Mat Timer';
   branding.tagline   = document.getElementById('bTagline').value.trim() || 'Competition · Training · Sparring';
-  branding.mdnsName  = document.getElementById('bMdnsName').value.trim() || 'bjjtimer';
   if (logoInput._pendingDataUrl) branding.logoDataUrl = logoInput._pendingDataUrl;
-  const newPins = { 1: document.getElementById('bPin1')?.value||'', 2: document.getElementById('bPin2')?.value||'', 3: document.getElementById('bPin3')?.value||'', 4: document.getElementById('bPin4')?.value||'' };
-  Object.assign(slotPins, newPins);
   if (roomId) await fetch(partyApiUrl('/api/branding'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...branding }) });
   applyBranding();
   document.getElementById('brandingModal').style.display='none';

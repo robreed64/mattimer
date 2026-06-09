@@ -31,6 +31,7 @@ export default class BjjTimerServer {
     this.tvDisplays   = { 1: 0,   2: 0,   3: 0,   4: 0    };
     this.floatingCount = 0;
     this.config = null;
+    this.lastState    = { 1: null, 2: null, 3: null, 4: null }; // last state per ctrl slot
   }
 
   async onStart() {
@@ -112,6 +113,10 @@ export default class BjjTimerServer {
         color: ownerSlot ? CTRL_COLORS[ownerSlot] : null,
         name:  ownerSlot ? (this.ctrlNames[ownerSlot] || null) : null,
       }));
+      // Send last known state so TV immediately reflects current settings
+      if (ownerSlot && this.lastState[ownerSlot]) {
+        connection.send(JSON.stringify({ type: 'state', ...this.lastState[ownerSlot] }));
+      }
       this._broadcastMonitorStatus();
 
     } else {
@@ -180,6 +185,10 @@ export default class BjjTimerServer {
         if (!ctrl || msg.tvSlot < 1 || msg.tvSlot > 4) return;
         this.tvOwner[msg.tvSlot] = ctrl.slot;
         this._sendToTv(msg.tvSlot, JSON.stringify({ type: 'ctrl:color', color: ctrl.color, name: this.ctrlNames[ctrl.slot] }));
+        // Send current state so TV immediately reflects controller settings
+        if (this.lastState[ctrl.slot]) {
+          this._sendToTv(msg.tvSlot, JSON.stringify({ type: 'state', ...this.lastState[ctrl.slot] }));
+        }
         this._broadcastMonitorStatus();
         break;
       }
@@ -198,6 +207,11 @@ export default class BjjTimerServer {
       case 'sw:state':
       case 'sound': {
         if (!ctrl) return;
+        // Cache latest timer state so new TV connections get it immediately
+        if (msg.type === 'state') {
+          const { type: _, ...stateData } = msg;
+          this.lastState[ctrl.slot] = stateData;
+        }
         const fwd = JSON.stringify(msg);
         for (let tv = 1; tv <= 4; tv++) {
           if (this.tvOwner[tv] === ctrl.slot) this._sendToTv(tv, fwd);
