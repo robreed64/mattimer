@@ -50,25 +50,30 @@ module.exports = async function handler(req, res) {
     customerId = gym?.stripe_customer_id;
   }
 
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: caller.email,
-      name: gymDisplayName || caller.email,
-      metadata: { gym_id: gymId },
-    });
-    customerId = customer.id;
-    await admin.from('gyms').update({ stripe_customer_id: customerId }).eq('id', gymId);
-  }
-
   const { roomId } = req.body || {};
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: 'subscription',
-    line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
-    success_url: `${SITE_URL}${roomId ? `?room=${roomId}` : ''}#checkout=success`,
-    cancel_url:  `${SITE_URL}${roomId ? `?room=${roomId}` : ''}`,
-    subscription_data: { metadata: { gym_id: gymId } },
-  });
 
-  return res.status(200).json({ url: session.url });
+  try {
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: caller.email,
+        name: gymDisplayName || caller.email,
+        metadata: { gym_id: gymId },
+      });
+      customerId = customer.id;
+      await admin.from('gyms').update({ stripe_customer_id: customerId }).eq('id', gymId);
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+      success_url: `${SITE_URL}${roomId ? `?room=${roomId}` : ''}#checkout=success`,
+      cancel_url:  `${SITE_URL}${roomId ? `?room=${roomId}` : ''}`,
+      subscription_data: { metadata: { gym_id: gymId } },
+    });
+
+    return res.status(200).json({ url: session.url });
+  } catch(err) {
+    return res.status(500).json({ error: err.message });
+  }
 };

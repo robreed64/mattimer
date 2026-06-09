@@ -1306,27 +1306,39 @@ function _showUpgradeModal(reason) {
 }
 
 async function startCheckout() {
-  const { data: { session } } = await _supabase.auth.getSession();
-  const res = await fetch('/api/create-checkout', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-    body: JSON.stringify({ roomId }),
-  });
-  const data = await res.json();
-  if (!data.url) { toast('Error: ' + (data.error || 'Could not start checkout')); return; }
-  window.location.href = data.url;
+  try {
+    toast('Opening checkout…');
+    const { data: { session } } = await _supabase.auth.getSession();
+    if (!session) { toast('Session expired — please sign in again.'); return; }
+    const res = await fetch('/api/create-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ roomId }),
+    });
+    const data = await res.json();
+    if (!data.url) { toast('Error: ' + (data.error || 'Could not start checkout')); return; }
+    window.location.href = data.url;
+  } catch(e) {
+    toast('Error: ' + e.message);
+  }
 }
 
 async function openBillingPortal() {
-  const { data: { session } } = await _supabase.auth.getSession();
-  const res = await fetch('/api/billing-portal', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-    body: JSON.stringify({ roomId }),
-  });
-  const data = await res.json();
-  if (!data.url) { toast('Error: ' + (data.error || 'Could not open billing portal')); return; }
-  window.location.href = data.url;
+  try {
+    toast('Opening billing portal…');
+    const { data: { session } } = await _supabase.auth.getSession();
+    if (!session) { toast('Session expired — please sign in again.'); return; }
+    const res = await fetch('/api/billing-portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ roomId }),
+    });
+    const data = await res.json();
+    if (!data.url) { toast('Error: ' + (data.error || 'Could not open billing portal')); return; }
+    window.location.href = data.url;
+  } catch(e) {
+    toast('Error: ' + e.message);
+  }
 }
 
 // ─── DEMO MODE ────────────────────────────────────────────────────
