@@ -1694,19 +1694,28 @@ async function loadRoomsList() {
 async function addRoomPrompt() {
   const name = prompt('Room name (e.g. "Kids Mat", "MMA Cage"):');
   if (!name?.trim()) return;
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  const { error } = await _supabase.from('gym_rooms').insert({ gym_id: _gymId, name: name.trim(), room_code: code });
-  if (error) { toast('Error: ' + error.message); return; }
-  toast(`Room "${name.trim()}" created — code: ${code}`);
+  const { data: { session } } = await _supabase.auth.getSession();
+  const res = await fetch('/api/create-room', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+    body: JSON.stringify({ name: name.trim() }),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast('Error: ' + (data.error || 'Could not create room')); return; }
+  toast(`Room "${data.name}" created — code: ${data.code}`);
   loadRoomsList();
 }
 
 async function deleteRoom(id) {
   if (!confirm('Remove this room? Anyone using its code will lose access.')) return;
-  const { error } = await _supabase.from('gym_rooms').delete().eq('id', id);
-  if (error) { toast('Error: ' + error.message); return; }
+  const { data: { session } } = await _supabase.auth.getSession();
+  const res = await fetch('/api/create-room', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+    body: JSON.stringify({ id }),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast('Error: ' + (data.error || 'Could not remove room')); return; }
   toast('Room removed.');
   loadRoomsList();
 }
