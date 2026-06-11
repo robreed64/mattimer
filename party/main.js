@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = {
 };
 
 import { makeCode } from '../lib/room-code';
+import { verifyRoomToken } from '../lib/room-token';
 
 function makeId() {
   return Math.random().toString(36).slice(2, 10);
@@ -52,12 +53,37 @@ export default class BjjTimerServer {
     return [role];
   }
 
+  // The demo room is intentionally open — everything else requires a token
+  // minted by /api/room-token once REQUIRE_AUTH is enabled.
+  get _isDemo() { return this.room.id.toLowerCase() === 'demo'; }
+  get _authRequired() { return String(this.room.env.REQUIRE_AUTH) === '1'; }
+
+  // Returns the token payload ({ room, role, sub, exp }) or null.
+  async _checkAuth(token) {
+    const secret = this.room.env.PARTY_AUTH_SECRET;
+    if (!secret || !token) return null;
+    return verifyRoomToken(token, String(secret), this.room.id.toUpperCase());
+  }
+
   async onConnect(connection, ctx) {
     if (!this.config) await this.onStart();
     const url  = new URL(ctx.request.url);
     const role = url.searchParams.get('role') || 'display';
 
     if (role === 'controller') {
+      // Displays and TVs are receive-only (TVs additionally prove a tvCode);
+      // controllers can drive timers on every claimed TV, so they must be authed.
+      if (!this._isDemo) {
+        const auth = await this._checkAuth(url.searchParams.get('token'));
+        if (!auth) {
+          if (this._authRequired) {
+            connection.send(JSON.stringify({ type: 'error', code: 'auth', msg: 'Not authorized for this room — please sign in again' }));
+            connection.close();
+            return;
+          }
+          console.log(`[auth warn-only] room ${this.room.id}: controller connect without valid token`);
+        }
+      }
       const name      = decodeURIComponent(url.searchParams.get('name') || 'Unnamed Class');
       const color     = url.searchParams.get('color') || null;
       const profileId = url.searchParams.get('profileId') || null;
@@ -177,6 +203,7 @@ export default class BjjTimerServer {
       }
 
       case 'profile:save': {
+        if (!ctrl) return;
         const profile = this.config.profiles.find(p => p.id === msg.profileId);
         if (profile) {
           profile.settings = { ...profile.settings, ...msg.settings };
@@ -237,14 +264,41 @@ export default class BjjTimerServer {
     // segments:   ['parties', 'main', 'ROOMID', 'api', ...]
     const apiPath  = '/' + segments.slice(3).join('/');
 
+    // Origin allowlist via ALLOWED_ORIGINS var (comma-separated); '*' if unset.
+    const allowedOrigins = String(this.room.env.ALLOWED_ORIGINS || '*');
+    const origin = req.headers.get('origin') || '';
     const cors = {
-      'Access-Control-Allow-Origin':  '*',
+      'Access-Control-Allow-Origin': allowedOrigins === '*'
+        ? '*'
+        : (allowedOrigins.split(',').map(s => s.trim()).includes(origin) ? origin : 'null'),
       'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type,X-Filename',
+      'Access-Control-Allow-Headers': 'Content-Type,X-Filename,Authorization',
+      'Vary': 'Origin',
     };
 
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     if (!this.config) await this.onStart();
+
+    // Room REST is controller/owner surface — require a room token outside demo.
+    let auth = null;
+    if (!this._isDemo) {
+      const bearer = (req.headers.get('authorization') || '').replace('Bearer ', '');
+      auth = await this._checkAuth(bearer);
+      if (!auth) {
+        if (this._authRequired) {
+          return Response.json({ error: 'Not authorized' }, { status: 401, headers: cors });
+        }
+        console.log(`[auth warn-only] room ${this.room.id}: ${req.method} ${apiPath} without valid token`);
+      }
+    }
+    // Destructive routes are owner/admin only (once a token is present to say so)
+    const destructive =
+      (req.method === 'DELETE' && /^\/api\/profiles\/[^/]+$/.test(apiPath)) ||
+      (req.method === 'POST' && apiPath === '/api/branding') ||
+      (req.method === 'POST' && /^\/api\/tvCodes\/\d+\/regenerate$/.test(apiPath));
+    if (destructive && auth && auth.role === 'coach') {
+      return Response.json({ error: 'Owner access required' }, { status: 403, headers: cors });
+    }
 
     // GET /api/sessions
     if (req.method === 'GET' && apiPath === '/api/sessions') {

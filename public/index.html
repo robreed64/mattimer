@@ -1181,6 +1181,53 @@ function partyApiUrl(path) {
   return `${proto}://${PARTYKIT_HOST}/parties/main/${roomId}${path}`;
 }
 
+// ─── ROOM TOKEN ───────────────────────────────────────────────────
+// Short-lived HMAC token proving this signed-in user may control roomId.
+// Sent on controller websocket connects and all PartyKit REST calls.
+let _roomToken    = null;
+let _roomTokenExp = 0;
+
+function _isDemoRoom() { return roomId?.toLowerCase() === 'demo'; }
+
+async function _mintRoomToken() {
+  _roomToken = null; _roomTokenExp = 0;
+  if (!roomId || _isDemoRoom()) return null;
+  try {
+    const { data: { session } } = await _supabase.auth.getSession();
+    if (!session) return null;
+    const res = await fetch('/api/room-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ roomId }),
+    });
+    if (!res.ok) return null;
+    const { token, exp } = await res.json();
+    _roomToken = token; _roomTokenExp = exp;
+  } catch(e) {}
+  return _roomToken;
+}
+
+async function _freshRoomToken() {
+  if (!_roomToken || _roomTokenExp - Date.now() < 60_000) await _mintRoomToken();
+  return _roomToken;
+}
+
+// fetch() against the PartyKit room REST API with the room token attached;
+// retries once with a re-minted token on 401.
+async function partyFetch(path, opts = {}) {
+  const doFetch = () => {
+    const headers = { ...(opts.headers || {}) };
+    if (_roomToken) headers['Authorization'] = 'Bearer ' + _roomToken;
+    return fetch(partyApiUrl(path), { ...opts, headers });
+  };
+  let res = await doFetch();
+  if (res.status === 401 && !_isDemoRoom()) {
+    await _mintRoomToken();
+    if (_roomToken) res = await doFetch();
+  }
+  return res;
+}
+
 // Helper: send a typed message (replaces socket.emit)
 function emit(type, data) {
   if (socket && socket.readyState === WebSocket.OPEN) {
@@ -1191,7 +1238,16 @@ function emit(type, data) {
 // Create a PartySocket connection for the given role + query params
 function openSocket(role, extraParams) {
   if (socket) { try { socket.close(); } catch(e) {} }
-  const query = { role, ...(extraParams || {}) };
+  // query is a function so PartySocket re-evaluates it on every reconnect,
+  // picking up a fresh room token after the old one expires.
+  const query = async () => {
+    const q = { role, ...(extraParams || {}) };
+    if (role === 'controller' && !_isDemoRoom()) {
+      const token = await _freshRoomToken();
+      if (token) q.token = token;
+    }
+    return q;
+  };
   socket = new PartySocket({
     host:  PARTYKIT_HOST,
     room:  roomId,
@@ -1455,7 +1511,7 @@ function _enterDemoMode() {
   document.getElementById('demoBanner').style.display = 'flex';
   const codeEl = document.getElementById('roomCodeDisplay');
   if (codeEl) codeEl.textContent = 'Demo';
-  fetch(partyApiUrl('/api/config')).then(r => r.json()).then(cfg => {
+  partyFetch('/api/config').then(r => r.json()).then(cfg => {
     tvCodes  = cfg.tvCodes;
     branding = { ...branding, ...cfg.branding };
     applyBranding();
@@ -1523,6 +1579,7 @@ async function _afterAuth(user) {
   if (isAdmin && roomParam) {
     _gymRole = 'owner';
     roomId   = roomParam;
+    _mintRoomToken();
     document.getElementById('loginView').style.display = 'none';
     document.getElementById('roomBar').style.display = 'flex';
     const codeEl = document.getElementById('roomCodeDisplay');
@@ -1704,19 +1761,21 @@ function selectRoom(code) {
   _finishRoomSetup();
 }
 
-function _finishRoomSetup() {
+async function _finishRoomSetup() {
   document.getElementById('loginView').style.display = 'none';
   document.getElementById('gymRoomPicker').style.display = 'none';
   document.getElementById('roomBar').style.display = 'flex';
   const codeEl = document.getElementById('roomCodeDisplay');
   if (codeEl) codeEl.textContent = _gymName || roomId;
 
+  await _mintRoomToken();
+
   if (_gymRole === 'owner') {
     const btn = document.getElementById('coachesBtn');
     if (btn) btn.style.display = '';
   }
 
-  fetch(partyApiUrl('/api/config')).then(r => r.json()).then(cfg => {
+  partyFetch('/api/config').then(r => r.json()).then(cfg => {
     tvCodes  = cfg.tvCodes;
     branding = { ...branding, ...cfg.branding };
     applyBranding();
@@ -1736,7 +1795,7 @@ function _finishRoomSetup() {
 // ─── SESSION HISTORY ──────────────────────────────────────────────
 async function loadRecentSessions() {
   if (_gymRole !== 'owner' || !roomId) return;
-  const res = await fetch(partyApiUrl('/api/sessions')).catch(() => null);
+  const res = await partyFetch('/api/sessions').catch(() => null);
   if (!res?.ok) return;
   const { sessions } = await res.json();
   if (!sessions?.length) return;
@@ -1766,7 +1825,7 @@ async function regenerateTvCode(slot) {
   const btn = document.getElementById('regenBtn-' + slot);
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
-    const res = await fetch(partyApiUrl(`/api/tvCodes/${slot}/regenerate`), { method: 'POST' });
+    const res = await partyFetch(`/api/tvCodes/${slot}/regenerate`, { method: 'POST' });
     const data = await res.json();
     if (data.tvCodes) {
       tvCodes = data.tvCodes;
@@ -2001,7 +2060,7 @@ function loadAudioFile(slot, input) {
   const localUrl = URL.createObjectURL(file);
   setAudioSlot(slot, localUrl, file.name);
   toast('Uploading ' + cap(slot) + ' sound...');
-  fetch(partyApiUrl('/api/audio/' + slot), {
+  partyFetch('/api/audio/' + slot, {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'audio/mpeg', 'X-Filename': file.name },
     body: file,
@@ -2023,7 +2082,7 @@ async function clearAudioFile(slot) {
   if (nameEl) { nameEl.textContent = 'Choose file'; nameEl.closest('.audio-file-btn').classList.remove('loaded'); }
   const input = document.getElementById('audio' + cap(slot)); if (input) input.value = '';
   try {
-    await fetch(partyApiUrl('/api/audio/' + slot), { method: 'DELETE' });
+    await partyFetch('/api/audio/' + slot, { method: 'DELETE' });
     emit('audio:clear', { slot });
     toast(cap(slot) + ' sound removed');
   } catch(e) {
@@ -2055,7 +2114,7 @@ function restoreAudioSlots(audioSlots) {
 // ─── LANDING ──────────────────────────────────────────────────────
 // Fetch config (TV codes + branding) on load — only when room is known
 if (roomId) {
-  fetch(partyApiUrl('/api/config')).then(r => r.json()).then(cfg => {
+  partyFetch('/api/config').then(r => r.json()).then(cfg => {
     tvCodes  = cfg.tvCodes;
     branding = { ...branding, ...cfg.branding };
     applyBranding();
@@ -2078,7 +2137,7 @@ function promptControllerPassword() {
 
 function loadProfiles() {
   if (!roomId) { profiles = []; return Promise.resolve(); }
-  return fetch(partyApiUrl('/api/profiles'))
+  return partyFetch('/api/profiles')
     .then(r => r.json())
     .then(data => { profiles = Array.isArray(data) ? data : []; })
     .catch(() => { profiles = profiles || []; });
@@ -2129,7 +2188,7 @@ function selectProfile(id) {
 async function deleteProfile(id) {
   const profile = profiles.find(p => p.id === id);
   if (!profile || !confirm('Delete profile "' + profile.name + '"?')) return;
-  await fetch(partyApiUrl('/api/profiles/' + id), { method: 'DELETE' });
+  await partyFetch('/api/profiles/' + id, { method: 'DELETE' });
   await loadProfiles();
   renderProfileGrid();
 }
@@ -2153,7 +2212,7 @@ async function submitCreateProfile() {
   const pin  = document.getElementById('newProfilePin').value;
   if (!name) { document.getElementById('newProfileName').focus(); return; }
   document.getElementById('createProfileModal').style.display = 'none';
-  const res  = await fetch(partyApiUrl('/api/profiles'), {
+  const res  = await partyFetch('/api/profiles', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ name, pin }),
   });
@@ -2189,7 +2248,7 @@ async function submitPin() {
   const err   = document.getElementById('pinError');
   const pin   = input ? input.value : '';
   if (!_pendingProfile) return;
-  const res = await fetch(partyApiUrl('/api/profiles/' + _pendingProfile.id + '/login'), {
+  const res = await partyFetch('/api/profiles/' + _pendingProfile.id + '/login', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ pin }),
   });
@@ -2953,7 +3012,7 @@ async function saveBranding() {
   branding.appName   = document.getElementById('bName').value.trim() || 'BJJ Mat Timer';
   branding.tagline   = document.getElementById('bTagline').value.trim() || 'Competition · Training · Sparring';
   if (logoInput._pendingDataUrl) branding.logoDataUrl = logoInput._pendingDataUrl;
-  if (roomId) await fetch(partyApiUrl('/api/branding'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...branding }) });
+  if (roomId) await partyFetch('/api/branding', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...branding }) });
   applyBranding();
   document.getElementById('brandingModal').style.display='none';
   toast('✓ Settings saved');

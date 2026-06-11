@@ -43,6 +43,15 @@ vercel --prod        # frontend + api
 | `STRIPE_SECRET_KEY` | Stripe API key |
 | `STRIPE_PRICE_ID` | subscription price |
 | `STRIPE_WEBHOOK_SECRET` | webhook signature verification |
+| `PARTY_AUTH_SECRET` | HMAC secret for room tokens (set the same value in PartyKit via `npx partykit env add PARTY_AUTH_SECRET`) |
+
+PartyKit-side vars (`npx partykit env add …`):
+
+| Var | Purpose |
+|---|---|
+| `PARTY_AUTH_SECRET` | same value as on Vercel; verifies room tokens |
+| `REQUIRE_AUTH` | set to `1` to enforce room auth (unset = warn-only logging while rolling out) |
+| `ALLOWED_ORIGINS` | comma-separated CORS origin allowlist for the room REST API (unset = `*`) |
 
 Browser-safe config lives in `public/supabase-config.js` (publishable key) and `public/partykit-config.js` (party host).
 
