@@ -61,6 +61,20 @@ Browser-safe config lives in `public/supabase-config.js` (publishable key) and `
 - `gym_users` — user ↔ gym membership with role `owner` | `coach`
 - `gym_rooms` — extra rooms per gym
 
+- `signup_attempts` — IP + timestamp rows backing the in-code signup rate
+  limit (5/hour per IP, 50/hour global; rows pruned after 24h). Create it
+  once in the Supabase SQL editor:
+
+  ```sql
+  create table signup_attempts (
+    id bigint generated always as identity primary key,
+    ip text not null,
+    created_at timestamptz not null default now()
+  );
+  create index signup_attempts_ip_time on signup_attempts (ip, created_at);
+  alter table signup_attempts enable row level security; -- no policies: service role only
+  ```
+
 Platform admins carry `app_metadata.role = 'admin'` and use `/admin.html`.
 
 ## Legacy LAN/Electron version

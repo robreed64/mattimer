@@ -1,6 +1,7 @@
 const { makeCode } = require('../lib/room-code');
 const { adminClient, SITE_URL } = require('./_lib/supabase');
 const { applyCors } = require('./_lib/cors');
+const { checkSignupRate } = require('./_lib/rate-limit');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -26,6 +27,12 @@ module.exports = async function handler(req, res) {
   }
 
   const admin = adminClient();
+
+  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+  const { allowed } = await checkSignupRate(admin, ip);
+  if (!allowed) {
+    return res.status(429).json({ error: 'Too many signup attempts. Please try again in an hour.' });
+  }
 
   // Generate a unique room code (collisions are astronomically rare but handle them)
   let roomCode;
