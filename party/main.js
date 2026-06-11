@@ -11,6 +11,10 @@ const DEFAULT_SETTINGS = {
 
 import { makeCode } from '../lib/room-code';
 import { verifyRoomToken } from '../lib/room-token';
+import { hashPin, verifyPin } from '../lib/pin';
+
+const PIN_MAX_FAILS   = 5;
+const PIN_LOCKOUT_MS  = 5 * 60 * 1000;
 
 function makeId() {
   return Math.random().toString(36).slice(2, 10);
@@ -43,6 +47,13 @@ export default class BjjTimerServer {
       let changed = false;
       while (this.config.tvCodes.length < 4) { this.config.tvCodes.push(makeCode()); changed = true; }
       if (!this.config.profiles) { this.config.profiles = []; changed = true; }
+      // One-time migration: hash any profile PINs stored in plaintext
+      for (const p of this.config.profiles) {
+        if (!('pin' in p)) continue;
+        if (p.pin) Object.assign(p, await hashPin(p.pin));
+        delete p.pin;
+        changed = true;
+      }
       if (!this.config.branding) { this.config.branding = { appName: 'BJJ Mat Timer', tagline: 'Competition · Training · Sparring', logoDataUrl: '' }; changed = true; }
       if (changed) await this.room.storage.put('config', this.config);
     }
@@ -103,7 +114,7 @@ export default class BjjTimerServer {
       connection.send(JSON.stringify({
         type:     'config',
         tvCodes:  this.config.tvCodes,
-        profiles: this.config.profiles.map(({ pin, ...p }) => ({ ...p, hasPin: !!pin })),
+        profiles: this._safeProfiles(),
         branding: this.config.branding,
         ctrlSlot: slot, ctrlColor, ctrlName: name,
       }));
@@ -311,17 +322,14 @@ export default class BjjTimerServer {
       return Response.json({
         tvCodes:    this.config.tvCodes,
         branding:   this.config.branding,
-        profiles:   this.config.profiles.map(({ pin, ...p }) => ({ ...p, hasPin: !!pin })),
+        profiles:   this._safeProfiles(),
         audioSlots: {},
       }, { headers: cors });
     }
 
     // GET /api/profiles
     if (req.method === 'GET' && apiPath === '/api/profiles') {
-      return Response.json(
-        this.config.profiles.map(({ pin, ...p }) => ({ ...p, hasPin: !!pin })),
-        { headers: cors }
-      );
+      return Response.json(this._safeProfiles(), { headers: cors });
     }
 
     // POST /api/profiles
@@ -330,7 +338,8 @@ export default class BjjTimerServer {
       if (!name?.trim()) return Response.json({ error: 'Name required' }, { status: 400, headers: cors });
       const usedColors = this.config.profiles.map(p => p.color);
       const color = PROFILE_COLORS.find(c => !usedColors.includes(c)) || PROFILE_COLORS[this.config.profiles.length % PROFILE_COLORS.length];
-      const profile = { id: makeId(), name: name.trim(), pin: pin || '', color, settings: { ...DEFAULT_SETTINGS, ...(settings || {}) } };
+      const profile = { id: makeId(), name: name.trim(), color, settings: { ...DEFAULT_SETTINGS, ...(settings || {}) } };
+      if (pin) Object.assign(profile, await hashPin(pin));
       this.config.profiles.push(profile);
       await this.room.storage.put('config', this.config);
       this._broadcastProfilesUpdated();
@@ -345,7 +354,11 @@ export default class BjjTimerServer {
         const profile = this.config.profiles.find(p => p.id === idMatch[1]);
         if (!profile) return Response.json({ error: 'Not found' }, { status: 404, headers: cors });
         if (body.name !== undefined) profile.name = body.name.trim() || profile.name;
-        if (body.pin  !== undefined) profile.pin  = body.pin;
+        if (body.pin !== undefined) {
+          delete profile.pinHash;
+          delete profile.pinSalt;
+          if (body.pin) Object.assign(profile, await hashPin(body.pin));
+        }
         if (body.settings) profile.settings = { ...profile.settings, ...body.settings };
         await this.room.storage.put('config', this.config);
         this._broadcastProfilesUpdated();
@@ -367,8 +380,28 @@ export default class BjjTimerServer {
       const { pin } = await req.json();
       const profile = this.config.profiles.find(p => p.id === loginMatch[1]);
       if (!profile) return Response.json({ error: 'Not found' }, { status: 404, headers: cors });
-      if (profile.pin && profile.pin !== pin) return Response.json({ error: 'Incorrect PIN' }, { status: 401, headers: cors });
-      const { pin: _, ...safe } = profile;
+
+      if (profile.pinHash) {
+        // Lockout after repeated failures — the real defense for 4-digit PINs
+        const failKey = 'pinFails:' + profile.id;
+        const fails = (await this.room.storage.get(failKey)) || { count: 0, lockedUntil: 0 };
+        if (fails.lockedUntil > Date.now()) {
+          const wait = Math.ceil((fails.lockedUntil - Date.now()) / 60000);
+          return Response.json({ error: `Too many attempts — try again in ${wait} min` }, { status: 429, headers: cors });
+        }
+        if (!(await verifyPin(pin, profile.pinHash, profile.pinSalt))) {
+          fails.count++;
+          if (fails.count >= PIN_MAX_FAILS) {
+            fails.lockedUntil = Date.now() + PIN_LOCKOUT_MS;
+            fails.count = 0;
+          }
+          await this.room.storage.put(failKey, fails);
+          return Response.json({ error: 'Incorrect PIN' }, { status: 401, headers: cors });
+        }
+        await this.room.storage.delete(failKey);
+      }
+
+      const { pin: _pin, pinHash: _h, pinSalt: _s, ...safe } = profile;
       return Response.json({ ok: true, profile: safe }, { headers: cors });
     }
 
@@ -434,8 +467,12 @@ export default class BjjTimerServer {
     };
   }
 
+  // Public view of profiles: never expose pin hash/salt (or legacy plaintext)
+  _safeProfiles() {
+    return this.config.profiles.map(({ pin, pinHash, pinSalt, ...p }) => ({ ...p, hasPin: !!(pinHash || pin) }));
+  }
+
   _broadcastProfilesUpdated() {
-    const updated = this.config.profiles.map(({ pin, ...p }) => ({ ...p, hasPin: !!pin }));
-    this.room.broadcast(JSON.stringify({ type: 'profiles:updated', profiles: updated }));
+    this.room.broadcast(JSON.stringify({ type: 'profiles:updated', profiles: this._safeProfiles() }));
   }
 }
