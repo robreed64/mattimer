@@ -567,6 +567,8 @@
             onkeydown="if(event.key==='Enter')submitSignup()">
         </div>
       </div>
+      <!-- Honeypot: invisible to humans, bots that fill it are dropped server-side -->
+      <input type="text" id="signupWebsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
       <button id="signupBtn" class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:.85rem;margin-bottom:.75rem" onclick="submitSignup()">Start Free Trial</button>
       <div id="signupError" style="display:none;color:var(--mat-red);font-family:var(--font-ui);font-size:.85rem;text-align:center;margin-bottom:.75rem"></div>
       <div style="text-align:center;font-family:var(--font-ui);font-size:.78rem;color:var(--mat-muted)">
@@ -1348,7 +1350,7 @@ async function submitSignup() {
     const res  = await fetch('/api/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, gymName, email }),
+      body: JSON.stringify({ name, gymName, email, website: document.getElementById('signupWebsite')?.value || '' }),
     });
     const data = await res.json();
     if (!res.ok) {
