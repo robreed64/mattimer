@@ -26,16 +26,26 @@ module.exports = [
     },
   },
   {
-    files: ['public/**/*.js'],
-    languageOptions: {
-      sourceType: 'script',
-      globals: { ...globals.browser, ...globals.serviceworker },
-    },
-  },
-  {
     rules: {
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }],
       'no-empty': ['error', { allowEmptyCatch: true }],
+    },
+  },
+  {
+    files: ['public/**/*.js'],
+    languageOptions: {
+      sourceType: 'script',
+      globals: {
+        ...globals.browser,
+        ...globals.serviceworker,
+        PartySocket: 'readonly', // vendored partysocket.js
+        QRCode: 'readonly',      // qrcodejs CDN script
+      },
+    },
+    rules: {
+      // Top-level functions and catch bindings are referenced from HTML
+      // onclick= attributes and legacy patterns static analysis can't see.
+      'no-unused-vars': 'off',
     },
   },
 ];
