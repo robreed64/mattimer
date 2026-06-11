@@ -84,8 +84,9 @@ export default class BjjTimerServer {
     if (role === 'controller') {
       // Displays and TVs are receive-only (TVs additionally prove a tvCode);
       // controllers can drive timers on every claimed TV, so they must be authed.
+      let auth = null;
       if (!this._isDemo) {
-        const auth = await this._checkAuth(url.searchParams.get('token'));
+        auth = await this._checkAuth(url.searchParams.get('token'));
         if (!auth) {
           if (this._authRequired) {
             connection.send(JSON.stringify({ type: 'error', code: 'auth', msg: 'Not authorized for this room — please sign in again' }));
@@ -108,7 +109,7 @@ export default class BjjTimerServer {
       this.ctrlSlots[slot] = connection.id;
       this.ctrlNames[slot] = name;
       const ctrlColor = color || CTRL_COLORS[slot];
-      this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, connectedAt: Date.now() };
+      this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, connectedAt: Date.now(), userRole: auth?.role || null };
       connection.setState({ role: 'controller', slot });
 
       connection.send(JSON.stringify({
@@ -177,7 +178,8 @@ export default class BjjTimerServer {
           }
         }
         const duration = Math.round((Date.now() - (ctrl.connectedAt || Date.now())) / 1000);
-        if (duration > 30) {
+        // Platform-admin visits aren't real classes — keep them out of Recent activity
+        if (duration > 30 && ctrl.userRole !== 'admin') {
           (async () => {
             const sessions = (await this.room.storage.get('sessions')) || [];
             sessions.push({ date: new Date(ctrl.connectedAt).toISOString(), name: ctrl.name, slot: ctrl.slot, duration });
