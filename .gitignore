@@ -1,1 +1,7 @@
+node_modules/
 .vercel
+.partykit/
+.flatpak-builder/
+dist/
+.env
+.env.*

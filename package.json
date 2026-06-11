@@ -1,95 +1,24 @@
 {
-  "name": "bjj-mat-timer",
+  "name": "bjj-timer",
   "version": "1.0.0",
-  "description": "BJJ Mat Timer — multi-screen training timer",
-  "homepage": "https://github.com/yourgym/bjj-mat-timer",
-  "main": "electron/main.js",
-  "author": "BJJ Mat Timer <admin@bjjtimer.app>",
+  "description": "BJJ Mat Timer — multi-tenant SaaS mat timer for BJJ gyms (Vercel + PartyKit + Supabase + Stripe)",
+  "homepage": "https://github.com/robreed64/bjj-timer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/robreed64/bjj-timer.git"
+  },
+  "author": "Rob Reed <robreed64@gmail.com>",
   "license": "MIT",
   "scripts": {
     "dev": "partykit dev",
-    "deploy": "partykit deploy",
-    "start": "node src/server.js",
-    "electron": "electron . --no-sandbox",
-    "build": "electron-builder --publish never",
-    "build:linux": "electron-builder --linux AppImage --publish never",
-    "build:mac": "electron-builder --mac dmg --publish never",
-    "build:windows": "electron-builder --win nsis --publish never",
-    "build:all": "electron-builder --linux AppImage --mac dmg --win nsis --publish never"
+    "deploy": "partykit deploy"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.0",
-    "express": "^4.18.2",
-    "mdns-js": "^1.0.3",
-    "socket.io": "^4.7.2",
     "stripe": "^22.2.0"
   },
   "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1",
     "partykit": "^0.0.111",
     "partysocket": "^1.1.19"
-  },
-  "build": {
-    "appId": "com.yourgymnasium.bjjtimer",
-    "productName": "BJJ Mat Timer",
-    "copyright": "Copyright © 2025",
-    "asar": true,
-    "buildVersion": "1.0.0",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "electron/**/*",
-      "src/**/*",
-      "public/**/*",
-      "node_modules/**/*",
-      "!node_modules/electron/**/*",
-      "!node_modules/electron-builder/**/*"
-    ],
-    "linux": {
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "category": "Utility",
-      "icon": "public/icons/icon.png",
-      "executableName": "bjj-mat-timer"
-    },
-    "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
-      "category": "public.app-category.utilities",
-      "icon": "public/icons/icon.icns"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "public/icons/icon.ico"
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "BJJ Mat Timer"
-    }
   }
 }
