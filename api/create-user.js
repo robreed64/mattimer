@@ -1,17 +1,11 @@
-const { createClient } = require('@supabase/supabase-js');
+const { SITE_URL } = require('./_lib/supabase');
+const { applyCors } = require('./_lib/cors');
+const { requireCaller, isOwnerOfGym } = require('./_lib/auth');
 
-const SUPABASE_URL         = process.env.SUPABASE_URL;
-const SERVICE_KEY          = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const DEFAULT_INVITE_ROLE  = 'coach';
-const SITE_URL             = process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  : 'https://bjj-timer-gamma.vercel.app';
+const DEFAULT_INVITE_ROLE = 'coach';
 
 module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (applyCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { name, email, gymId } = req.body;
@@ -19,32 +13,16 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'email and gymId are required' });
   }
 
-  const callerJwt = (req.headers.authorization || '').replace('Bearer ', '');
-  if (!callerJwt) return res.status(401).json({ error: 'Not authenticated' });
+  const auth = await requireCaller(req, res);
+  if (!auth) return;
+  const { admin, caller, isAdmin } = auth;
 
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  // Verify caller JWT via admin client
-  const { data: { user: caller }, error: authErr } = await admin.auth.getUser(callerJwt);
-  if (authErr || !caller) return res.status(401).json({ error: 'Invalid session: ' + (authErr?.message || 'no user') });
-
-  const isAdmin = caller.app_metadata?.role === 'admin';
-  if (!isAdmin) {
-    // Gym owners can invite anyone to their gym
-    const { data: membership } = await admin
-      .from('gym_users')
-      .select('role')
-      .eq('gym_id', gymId)
-      .eq('user_id', caller.id)
-      .single();
-    if (!membership || membership.role !== 'owner') {
-      return res.status(403).json({ error: 'You are not an owner of that gym' });
-    }
+  // Gym owners can invite anyone to their gym
+  if (!isAdmin && !(await isOwnerOfGym(admin, caller.id, gymId))) {
+    return res.status(403).json({ error: 'You are not an owner of that gym' });
   }
 
-  // Generate invite link
+  // Generate invite link (Supabase sends the email automatically)
   const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
     type: 'invite',
     email,

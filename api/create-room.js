@@ -1,57 +1,25 @@
-const { createClient } = require('@supabase/supabase-js');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-function makeCode() {
-  let c = '';
-  for (let i = 0; i < 6; i++) c += CHARS[Math.floor(Math.random() * CHARS.length)];
-  return c;
-}
+const { makeCode } = require('../lib/room-code');
+const { applyCors } = require('./_lib/cors');
+const { requireCaller, resolveOwnedGym } = require('./_lib/auth');
 
 module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (applyCors(req, res, 'GET, POST, DELETE, OPTIONS')) return;
 
-  const callerJwt = (req.headers.authorization || '').replace('Bearer ', '');
-  if (!callerJwt) return res.status(401).json({ error: 'Not authenticated' });
+  const auth = await requireCaller(req, res);
+  if (!auth) return;
 
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
+  const roomId = (req.method === 'GET' ? req.query : req.body || {}).roomId;
+  const gym = await resolveOwnedGym(auth, res, roomId, {
+    forbiddenMsg: 'Only gym owners can manage rooms',
   });
-
-  const { data: { user: caller }, error: authErr } = await admin.auth.getUser(callerJwt);
-  if (authErr || !caller) return res.status(401).json({ error: 'Invalid session' });
-
-  const isAdmin = caller.app_metadata?.role === 'admin';
-  let gymId;
-
-  if (isAdmin) {
-    const roomId = (req.method === 'GET' ? req.query : req.body || {}).roomId;
-    if (!roomId) return res.status(400).json({ error: 'roomId required' });
-    const { data: gym } = await admin.from('gyms').select('id').eq('room_code', roomId).single();
-    if (!gym) return res.status(404).json({ error: 'Gym not found for that room code' });
-    gymId = gym.id;
-  } else {
-    const { data: membership } = await admin
-      .from('gym_users')
-      .select('gym_id, role')
-      .eq('user_id', caller.id)
-      .single();
-    if (!membership || membership.role !== 'owner') {
-      return res.status(403).json({ error: 'Only gym owners can manage rooms' });
-    }
-    gymId = membership.gym_id;
-  }
+  if (!gym) return;
+  const { admin } = auth;
 
   if (req.method === 'GET') {
     const { data: rooms } = await admin
       .from('gym_rooms')
       .select('id, name, room_code')
-      .eq('gym_id', gymId)
+      .eq('gym_id', gym.id)
       .order('created_at');
     return res.status(200).json({ rooms: rooms || [] });
   }
@@ -65,7 +33,7 @@ module.exports = async function handler(req, res) {
       code = makeCode();
       ({ error: insertErr } = await admin
         .from('gym_rooms')
-        .insert({ gym_id: gymId, name: name.trim(), room_code: code }));
+        .insert({ gym_id: gym.id, name: name.trim(), room_code: code }));
       attempts++;
     } while (insertErr?.code === '23505' && attempts < 5); // retry on rare code collision
 
@@ -81,7 +49,7 @@ module.exports = async function handler(req, res) {
       .from('gym_rooms')
       .delete()
       .eq('id', id)
-      .eq('gym_id', gymId); // scope to caller's gym
+      .eq('gym_id', gym.id); // scope to caller's gym
 
     if (delErr) return res.status(500).json({ error: delErr.message });
     return res.status(200).json({ ok: true });

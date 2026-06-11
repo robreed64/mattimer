@@ -1,23 +1,9 @@
-const { createClient } = require('@supabase/supabase-js');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const SITE_URL     = process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  : 'https://bjj-timer-gamma.vercel.app';
-
-const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-function makeCode() {
-  let c = '';
-  for (let i = 0; i < 6; i++) c += CHARS[Math.floor(Math.random() * CHARS.length)];
-  return c;
-}
+const { makeCode } = require('../lib/room-code');
+const { adminClient, SITE_URL } = require('./_lib/supabase');
+const { applyCors } = require('./_lib/cors');
 
 module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (applyCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { name, gymName, email } = req.body || {};
@@ -25,9 +11,7 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'Your name, gym name, and email are all required.' });
   }
 
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const admin = adminClient();
 
   // Generate a unique room code (collisions are astronomically rare but handle them)
   let roomCode;

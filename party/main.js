@@ -9,12 +9,7 @@ const DEFAULT_SETTINGS = {
   warningEnabled: true, warningThreshold: 30, showRound: false,
 };
 
-function makeCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let c = '';
-  for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)];
-  return c;
-}
+import { makeCode } from '../lib/room-code';
 
 function makeId() {
   return Math.random().toString(36).slice(2, 10);
@@ -164,7 +159,7 @@ export default class BjjTimerServer {
 
   onMessage(message, sender) {
     let msg;
-    try { msg = JSON.parse(message); } catch(e) { return; }
+    try { msg = JSON.parse(message); } catch { return; }
     const ctrl = this.controllers[sender.id];
 
     switch (msg.type) {

@@ -11,13 +11,18 @@
   "license": "MIT",
   "scripts": {
     "dev": "partykit dev",
-    "deploy": "partykit deploy"
+    "deploy": "partykit deploy",
+    "lint": "eslint .",
+    "test": "node --test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.0",
     "stripe": "^22.2.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0",
     "partykit": "^0.0.111",
     "partysocket": "^1.1.19"
   }
