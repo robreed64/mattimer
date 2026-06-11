@@ -12,6 +12,13 @@ module.exports = [
     },
   },
   {
+    files: ['api/**/*.mjs'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: { ...globals.node, Request: 'readonly', Response: 'readonly' },
+    },
+  },
+  {
     files: ['party/**/*.js'],
     languageOptions: {
       sourceType: 'module',
