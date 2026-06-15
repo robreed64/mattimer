@@ -536,7 +536,7 @@ function _showSetPassword() {
         <div>
           <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">New Password</label>
           <div style="display:flex;align-items:center;gap:.5rem">
-            <input type="password" id="setPassInput" placeholder="Min 8 characters"
+            <input type="password" id="setPassInput" placeholder="Min 8 characters" autocapitalize="none" autocorrect="off"
               style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none"
               onkeydown="if(event.key==='Enter')setNewPassword()">
             <button type="button" onclick="togglePw('setPassInput',this)" tabindex="-1"

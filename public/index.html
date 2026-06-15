@@ -364,7 +364,7 @@
         <div style="font-family:var(--font-ui);font-size:.7rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.65rem">Change Password</div>
         <div style="display:flex;flex-direction:column;gap:.5rem">
           <div style="display:flex;align-items:center;gap:.5rem">
-            <input type="password" id="acctNewPw" placeholder="New password (min 8 chars)"
+            <input type="password" id="acctNewPw" placeholder="New password (min 8 chars)" autocapitalize="none" autocorrect="off"
               style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;transition:border-color .15s"
               onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
             <button type="button" onclick="togglePw('acctNewPw',this)" tabindex="-1"
