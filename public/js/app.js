@@ -823,7 +823,9 @@ const CTRL_COLOR_LABEL = {
 
 // ─── AUDIO ENGINE ─────────────────────────────────────────────────
 let audioCtx = null;
-let soundTheme = localStorage.getItem('mattimer_sound_theme') || 'classic';
+const VALID_THEMES = new Set(['classic', 'bell', 'digital', 'minimal']);
+let soundTheme = VALID_THEMES.has(localStorage.getItem('mattimer_sound_theme'))
+  ? localStorage.getItem('mattimer_sound_theme') : 'classic';
 function setSoundTheme(t) { soundTheme = t; localStorage.setItem('mattimer_sound_theme', t); }
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
