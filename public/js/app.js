@@ -851,6 +851,8 @@ const CTRL_COLOR_LABEL = {
 
 // ─── AUDIO ENGINE ─────────────────────────────────────────────────
 let audioCtx = null;
+let soundTheme = localStorage.getItem('mattimer_sound_theme') || 'classic';
+function setSoundTheme(t) { soundTheme = t; localStorage.setItem('mattimer_sound_theme', t); }
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -878,7 +880,54 @@ function playBuzzer() {
     osc.start(now); osc.stop(now + d + 0.1);
   });
 }
-function testBuzzer() { playBuzzer(); }
+function testBuzzer() { SOUND_THEMES[soundTheme].buzzerSound(); }
+
+// ─── SOUND THEMES ─────────────────────────────────────────────────
+function _ringBell(freq, dur, vol, delay = 0) {
+  const ctx = getAudioCtx(), t = ctx.currentTime + delay;
+  [freq, freq * 2.76, freq * 5.4].forEach((f, i) => {
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.value = f;
+    const v = vol * [1, 0.4, 0.15][i];
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.start(t); osc.stop(t + dur + 0.1);
+  });
+}
+function _digitalAlarm() {
+  for (let i = 0; i < 4; i++) { beep(800, 0.12, 'sine', 0.4, i * 0.25); beep(600, 0.12, 'sine', 0.4, i * 0.25 + 0.13); }
+}
+const SOUND_THEMES = {
+  classic: {
+    countdownBeep() { playCountdownBeep(); },
+    accentBeep()    { playAccentBeep(); },
+    startSound()    { beep(660, 0.12, 'sine', 0.5); },
+    restSound()     { beep(330, 0.3, 'sine', 0.45); beep(294, 0.3, 'sine', 0.35, 0.25); },
+    buzzerSound()   { playBuzzer(); },
+  },
+  bell: {
+    countdownBeep() { beep(1800, 0.05, 'sine', 0.3); },
+    accentBeep()    { _ringBell(500, 0.3, 0.7); _ringBell(500, 0.3, 0.7, 0.08); },
+    startSound()    { _ringBell(500, 1.5, 0.9); },
+    restSound()     { _ringBell(330, 1.2, 0.6); },
+    buzzerSound()   { _ringBell(500, 1.0, 0.9); _ringBell(500, 1.0, 0.9, 0.28); _ringBell(500, 1.0, 0.9, 0.56); },
+  },
+  digital: {
+    countdownBeep() { beep(1000, 0.07, 'sine', 0.35); },
+    accentBeep()    { beep(1000, 0.08, 'sine', 0.4); beep(1500, 0.08, 'sine', 0.4, 0.1); },
+    startSound()    { beep(523, 0.1, 'sine', 0.4); beep(659, 0.1, 'sine', 0.4, 0.1); beep(784, 0.15, 'sine', 0.45, 0.2); },
+    restSound()     { beep(660, 0.12, 'sine', 0.35); beep(523, 0.15, 'sine', 0.35, 0.15); },
+    buzzerSound()   { _digitalAlarm(); },
+  },
+  minimal: {
+    countdownBeep() { beep(440, 0.06, 'sine', 0.15); },
+    accentBeep()    { beep(660, 0.08, 'sine', 0.2); },
+    startSound()    { beep(880, 0.12, 'sine', 0.25); },
+    restSound()     { beep(440, 0.15, 'sine', 0.2); },
+    buzzerSound()   { beep(330, 0.3, 'sine', 0.3); beep(294, 0.3, 'sine', 0.25, 0.35); },
+  },
+};
 
 // ─── CUSTOM AUDIO FILES ───────────────────────────────────────────
 const customAudio = { start: null, stop: null, rest: null };
@@ -1369,13 +1418,14 @@ function _onMessage(event) {
       if (mode !== 'display') break;
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const theme = SOUND_THEMES[msg.theme] || SOUND_THEMES.classic;
         const play = () => {
           switch (msg.soundType) {
-            case 'beep':   playCountdownBeep(); break;
-            case 'accent': playAccentBeep(); break;
-            case 'buzzer': if (!playCustomAudio('stop'))  playBuzzer(); break;
-            case 'start':  if (!playCustomAudio('start')) beep(660, 0.12, 'sine', 0.5); break;
-            case 'rest':   if (!playCustomAudio('rest'))  { beep(330, 0.3, 'sine', 0.45); setTimeout(() => beep(294, 0.3, 'sine', 0.35), 250); } break;
+            case 'beep':   theme.countdownBeep(); break;
+            case 'accent': theme.accentBeep(); break;
+            case 'buzzer': if (!playCustomAudio('stop'))  theme.buzzerSound(); break;
+            case 'start':  if (!playCustomAudio('start')) theme.startSound(); break;
+            case 'rest':   if (!playCustomAudio('rest'))  theme.restSound(); break;
           }
         };
         if (audioCtx.state === 'suspended') audioCtx.resume().then(play).catch(()=>{});
@@ -1504,8 +1554,8 @@ function handleTickSounds(prev, newTime) {
   const beepOn = document.getElementById('soundBeepToggle')?.checked ?? true;
   if (state.phase !== 'fight') return;
   if (beepOn && newTime > 0 && newTime <= 10) {
-    if (newTime <= 3) { playAccentBeep(); emit('sound', { soundType: 'accent' }); }
-    else              { playCountdownBeep(); emit('sound', { soundType: 'beep' }); }
+    if (newTime <= 3) { SOUND_THEMES[soundTheme].accentBeep(); emit('sound', { soundType: 'accent', theme: soundTheme }); }
+    else              { SOUND_THEMES[soundTheme].countdownBeep(); emit('sound', { soundType: 'beep', theme: soundTheme }); }
   }
 }
 
@@ -1513,8 +1563,8 @@ function handlePhaseEnd() {
   const buzzerOn = document.getElementById('soundBuzzerToggle')?.checked ?? true;
   if (state.phase === 'fight') {
     const playedCustom = playCustomAudio('stop');
-    if (!playedCustom && buzzerOn) playBuzzer();
-    if (playedCustom || buzzerOn) emit('sound', { soundType: 'buzzer' });
+    if (!playedCustom && buzzerOn) SOUND_THEMES[soundTheme].buzzerSound();
+    if (playedCustom || buzzerOn) emit('sound', { soundType: 'buzzer', theme: soundTheme });
   }
   if (state.phase === 'fight') {
     if (state.currentRound >= state.totalRounds) {
@@ -1527,20 +1577,20 @@ function handlePhaseEnd() {
     } else if (state.restDuration > 0) {
       state.phase = 'rest'; state.timeRemaining = state.restDuration;
       const playedCustomRest = playCustomAudio('rest');
-      if (!playedCustomRest) { beep(330, 0.3, 'sine', 0.45); beep(294, 0.3, 'sine', 0.35, 0.25); }
-      emit('sound', { soundType: 'rest' });
+      if (!playedCustomRest) SOUND_THEMES[soundTheme].restSound();
+      emit('sound', { soundType: 'rest', theme: soundTheme });
       emit('overlay', { msg: 'REST' });
     } else {
       const playedCustomStart = playCustomAudio('start');
-      if (!playedCustomStart) beep(660, 0.12, 'sine', 0.5);
-      emit('sound', { soundType: 'start' });
+      if (!playedCustomStart) SOUND_THEMES[soundTheme].startSound();
+      emit('sound', { soundType: 'start', theme: soundTheme });
       nextRound();
     }
   } else {
     state.currentRound++; state.phase = 'fight'; state.timeRemaining = state.roundDuration;
     const playedCustomStart = playCustomAudio('start');
-    if (!playedCustomStart) beep(660, 0.12, 'sine', 0.5);
-    emit('sound', { soundType: 'start' });
+    if (!playedCustomStart) SOUND_THEMES[soundTheme].startSound();
+    emit('sound', { soundType: 'start', theme: soundTheme });
     emit('overlay', { msg: 'FIGHT!' });
     setTimeout(() => emit('overlay', { msg: '' }), 2500);
   }
@@ -1568,6 +1618,8 @@ function nextRound() {
 // ─── SETTINGS MODAL ───────────────────────────────────────────────
 function openSettingsModal() {
   document.getElementById('settingsModal').style.display = 'flex';
+  const sel = document.getElementById('soundThemeSelect');
+  if (sel) sel.value = soundTheme;
 }
 function closeSettingsModal(e) {
   if (e && e.target !== document.getElementById('settingsModal')) return;

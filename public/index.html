@@ -71,7 +71,7 @@
       <div>
         <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Password</label>
         <div style="display:flex;align-items:center;gap:.5rem">
-          <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password"
+          <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password" autocapitalize="none" autocorrect="off"
             style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;transition:border-color .15s"
             onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
             onkeydown="if(event.key==='Enter')signIn()">
@@ -562,6 +562,16 @@
       <!-- Sounds -->
       <div class="modal-field">
         <label>Sounds</label>
+        <div class="toggle-row" style="margin-bottom:.6rem">
+          <span>Sound Theme</span>
+          <select id="soundThemeSelect" onchange="setSoundTheme(this.value)"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.85rem;padding:.3rem .5rem;cursor:pointer;outline:none">
+            <option value="classic">Classic</option>
+            <option value="bell">Boxing Bell</option>
+            <option value="digital">Digital</option>
+            <option value="minimal">Minimal</option>
+          </select>
+        </div>
         <div class="toggle-row"><span>Countdown beeps</span><label class="toggle"><input type="checkbox" id="soundBeepToggle" checked><span class="toggle-slider"></span></label></div>
         <div class="toggle-row"><span>End buzzer</span><label class="toggle"><input type="checkbox" id="soundBuzzerToggle" checked><span class="toggle-slider"></span></label></div>
         <button class="btn btn-outline" style="width:100%;font-size:.8rem;margin-top:.5rem;margin-bottom:1rem" onclick="testBuzzer()">🔊 Test Buzzer</button>
