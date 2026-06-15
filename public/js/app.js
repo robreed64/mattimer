@@ -617,7 +617,6 @@ async function _finishRoomSetup() {
     showOnboardingIfNeeded();
     if (_gymRole === 'owner') {
       _checkSubscription();
-      loadRecentSessions();
     }
   }).catch(() => {});
 
@@ -626,33 +625,6 @@ async function _finishRoomSetup() {
   }
 }
 
-// ─── SESSION HISTORY ──────────────────────────────────────────────
-async function loadRecentSessions() {
-  if (_gymRole !== 'owner' || !roomId) return;
-  const res = await partyFetch('/api/sessions').catch(() => null);
-  if (!res?.ok) return;
-  const { sessions } = await res.json();
-  if (!sessions?.length) return;
-  const card = document.getElementById('activityCard');
-  const list = document.getElementById('activityList');
-  if (!card || !list) return;
-  list.innerHTML = sessions.map(s => {
-    const d = new Date(s.date);
-    const mins = Math.floor(s.duration / 60);
-    const dur = mins >= 1 ? mins + 'm' : s.duration + 's';
-    return `<div style="display:flex;align-items:center;gap:.75rem;padding:.3rem 0;border-bottom:1px solid var(--mat-border);font-family:var(--font-ui);font-size:.82rem">
-      <span style="color:var(--mat-muted);width:6ch;flex-shrink:0">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
-      <span style="color:var(--mat-text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(s.name)}</span>
-      <span style="color:var(--mat-muted);flex-shrink:0">${dur}</span>
-    </div>`;
-  }).join('');
-  card.style.display = 'block';
-}
-
-function dismissActivity() {
-  const card = document.getElementById('activityCard');
-  if (card) card.style.display = 'none';
-}
 
 // ─── TV CODE REGENERATION ─────────────────────────────────────────
 async function regenerateTvCode(slot) {
