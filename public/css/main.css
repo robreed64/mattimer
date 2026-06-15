@@ -32,7 +32,7 @@
       repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,.015) 40px, rgba(255,255,255,.015) 41px);
     pointer-events: none;
   }
-  .logo-mark { width: 80px; height: 80px; margin-bottom: 1.5rem; overflow: hidden; }
+  .logo-mark { width: 200px; height: 200px; margin-bottom: 1.5rem; overflow: hidden; }
   .logo-mark svg, .logo-mark img { width: 100%; height: 100%; object-fit: contain; }
   .landing-title { font-family: var(--font-display); font-size: clamp(3rem,8vw,6rem); letter-spacing: .05em; color: var(--mat-text); text-align: center; line-height: .9; margin-bottom: .5rem; }
   .landing-sub { font-family: var(--font-ui); font-size: 1.1rem; letter-spacing: .3em; color: var(--mat-muted); text-transform: uppercase; margin-bottom: 3rem; }
