@@ -1187,12 +1187,22 @@ function openRenameSession() {
   }
 }
 
+function _getCtrlDeviceId() {
+  let id = localStorage.getItem('mattimer_ctrl_device_id');
+  if (!id) {
+    id = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
+    localStorage.setItem('mattimer_ctrl_device_id', id);
+  }
+  return id;
+}
+
 function startController() {
   mode = 'controller';
   openSocket('controller', {
     name:      encodeURIComponent(myCtrlName || 'Unnamed Class'),
     color:     _pendingProfile?.color || '',
     profileId: _pendingProfile?.id    || '',
+    clientId:  _getCtrlDeviceId(),
   });
   document.getElementById('landing').style.display    = 'none';
   document.getElementById('controller').style.display = 'block';

@@ -99,6 +99,7 @@ export default class BjjTimerServer {
       const name      = decodeURIComponent(url.searchParams.get('name') || 'Unnamed Class');
       const color     = url.searchParams.get('color') || null;
       const profileId = url.searchParams.get('profileId') || null;
+      const clientId  = url.searchParams.get('clientId')  || null;
 
       const authSub = auth?.sub || null;
 
@@ -114,7 +115,8 @@ export default class BjjTimerServer {
         const occupant = this.controllers[this.ctrlSlots[i]];
         if (!occupant) continue;
         if ((authSub && occupant.authSub === authSub) ||
-            (profileId && occupant.profileId === profileId)) {
+            (profileId && occupant.profileId === profileId) ||
+            (clientId && occupant.clientId === clientId)) {
           const old = [...this.room.getConnections('controller')].find(c => c.id === this.ctrlSlots[i]);
           if (old) old.close();
           this._freeCtrlSlot(i);
@@ -130,7 +132,7 @@ export default class BjjTimerServer {
         return;
       }
       const ctrlColor = color || CTRL_COLORS[slot];
-      this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, authSub, connectedAt: Date.now(), userRole: auth?.role || null };
+      this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };
       this.ctrlSlots[slot] = connection.id;
       this.ctrlNames[slot] = name;
       connection.setState({ role: 'controller', slot });
