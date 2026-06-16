@@ -156,14 +156,14 @@ export default class BjjTimerServer {
       if (!isTakeover || !this.timerStates[slot]) {
         this.timerStates[slot] = this._newTimerState();
       }
-      // Persist identity so reconnect detection survives DO hibernation
       this.ctrlIdentities[slot] = { authSub, profileId, clientId };
-      await this.room.storage.put('ctrlIdentity:' + slot, { authSub, profileId, clientId });
       const ctrlColor = color || CTRL_COLORS[slot];
       this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };
       this.ctrlSlots[slot] = connection.id;
       this.ctrlNames[slot] = name;
       connection.setState({ role: 'controller', slot });
+      // Fire-and-forget: in-memory update above handles live reconnects; storage persists identity across hibernation
+      this.room.storage.put('ctrlIdentity:' + slot, { authSub, profileId, clientId });
 
       connection.send(JSON.stringify({
         type:       'config',
