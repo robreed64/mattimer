@@ -85,6 +85,9 @@
     <div style="text-align:center;margin-top:.9rem">
       <button type="button" onclick="forgotPassword()" style="background:none;border:none;color:var(--mat-muted);font-family:var(--font-ui);font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0">Forgot password?</button>
     </div>
+    <div style="text-align:center;margin-top:.6rem">
+      <a href="/" style="color:var(--mat-muted);font-family:var(--font-ui);font-size:.78rem;text-decoration:underline">← Home</a>
+    </div>
   </div>
 </div>
 
@@ -352,7 +355,7 @@
         <div style="font-family:var(--font-ui);font-size:.7rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.3rem">Signed in as</div>
         <div id="accountEmailDisplay" style="font-family:var(--font-ui);font-size:.9rem;color:var(--mat-text)"></div>
       </div>
-      <div style="border-top:1px solid var(--mat-border);padding-top:1rem">
+      <div id="accountChangePasswordSection" style="border-top:1px solid var(--mat-border);padding-top:1rem">
         <div style="font-family:var(--font-ui);font-size:.7rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.65rem">Change Password</div>
         <div style="display:flex;flex-direction:column;gap:.5rem">
           <div style="display:flex;align-items:center;gap:.5rem">
@@ -377,7 +380,7 @@
       <div id="accountBillingBtn"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-red" style="font-size:.8rem;padding:.5rem 1rem" onclick="signOut()">Sign Out</button>
+      <button class="btn btn-red" id="accountSignOutBtn" style="font-size:.8rem;padding:.5rem 1rem" onclick="signOut()">Sign Out</button>
       <button class="btn btn-outline" onclick="closeAccountModal()">Close</button>
     </div>
   </div>

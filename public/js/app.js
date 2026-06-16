@@ -208,6 +208,10 @@ function openAccountModal() {
   document.getElementById('acctConfirmPw').value = '';
   document.getElementById('acctPwError').style.display = 'none';
 
+  const hasUser = !!_currentUser;
+  document.getElementById('accountChangePasswordSection').style.display = hasUser ? '' : 'none';
+  document.getElementById('accountSignOutBtn').textContent = hasUser ? 'Sign Out' : 'Leave Gym';
+
   // Billing section — only for gym owners
   const billingSection = document.getElementById('accountBillingSection');
   if (_gymRole === 'owner' && _gymSub) {
