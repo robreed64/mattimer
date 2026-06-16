@@ -109,6 +109,12 @@ export default class BjjTimerServer {
           delete this.controllers[occupantId];
           this.ctrlSlots[i] = null;
           this.ctrlNames[i] = '';
+          for (let tv = 1; tv <= 4; tv++) {
+            if (this.tvOwner[tv] === i) {
+              this.tvOwner[tv] = null;
+              this._sendToTv(tv, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
+            }
+          }
         }
       }
 
@@ -119,11 +125,11 @@ export default class BjjTimerServer {
         connection.close();
         return;
       }
-      connection.setState({ role: 'controller', slot });
-      this.ctrlSlots[slot] = connection.id;
-      this.ctrlNames[slot] = name;
       const ctrlColor = color || CTRL_COLORS[slot];
       this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, connectedAt: Date.now(), userRole: auth?.role || null };
+      this.ctrlSlots[slot] = connection.id;
+      this.ctrlNames[slot] = name;
+      connection.setState({ role: 'controller', slot });
 
       connection.send(JSON.stringify({
         type:     'config',
