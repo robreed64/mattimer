@@ -156,15 +156,10 @@ export default class BjjTimerServer {
         return;
       }
       const tvSlot = idx + 1;
-      // Count live connections for this slot dynamically — the in-memory counter
-      // can be stale after hibernation or a missed onClose.
-      const activeTvCount = [...this.room.getConnections('tv')]
-        .filter(c => c.state?.tvSlot === tvSlot).length;
-      if (activeTvCount > 0) {
-        connection.send(JSON.stringify({ type: 'error', msg: `TV ${tvSlot} is already in use` }));
-        connection.send(JSON.stringify({ type: 'tv:taken', slot: tvSlot }));
-        connection.close();
-        return;
+      // Close any existing connection on this slot (stale after hibernation, or same
+      // device reconnecting). onClose will decrement tvDisplays for the old connection.
+      for (const c of this.room.getConnections('tv')) {
+        if (c.state?.tvSlot === tvSlot) c.close();
       }
       connection.setState({ role: 'tv', tvSlot });
       this.tvDisplays[tvSlot]++;
