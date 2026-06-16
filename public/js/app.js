@@ -817,6 +817,7 @@ let myCtrlSlot  = null;
 let myCtrlColor = null;
 let myCtrlName  = '';
 let myTvClaims  = new Set();
+let _pendingAutoReclaim = false;
 
 const CTRL_COLOR_HEX = {
   blue: '#3B82F6', green: '#10B981', amber: '#F59E0B', pink: '#EC4899',
@@ -1261,7 +1262,7 @@ function _onMessage(event) {
     case 'config': {
       tvCodes  = msg.tvCodes;
       branding = { ...branding, ...msg.branding };
-      if (msg.ctrlSlot)  myCtrlSlot  = msg.ctrlSlot;
+      if (msg.ctrlSlot)  { myCtrlSlot = msg.ctrlSlot; _pendingAutoReclaim = true; }
       if (msg.ctrlColor) myCtrlColor = msg.ctrlColor;
       applyBranding();
       applyControllerColor();
@@ -1334,6 +1335,12 @@ function _onMessage(event) {
         floatPanel?.classList.remove('active');
         if (floatCount) floatCount.textContent = '0 connected';
         if (floatDot) { floatDot.style.background = ''; floatDot.style.boxShadow = ''; }
+      }
+      if (_pendingAutoReclaim && myCtrlSlot) {
+        _pendingAutoReclaim = false;
+        for (const tv of _loadClaimedTvs()) {
+          if (!tvOwner?.[tv]) claimTv(tv);
+        }
       }
       break;
     }
@@ -1446,13 +1453,23 @@ function hideReconnectOverlay() {
 })();
 
 // ─── TV CLAIM / RELEASE ───────────────────────────────────────────
+function _saveClaimedTvs() {
+  if (!roomId) return;
+  localStorage.setItem('mattimer_tv_claims_' + roomId, JSON.stringify([...myTvClaims]));
+}
+function _loadClaimedTvs() {
+  try { return JSON.parse(localStorage.getItem('mattimer_tv_claims_' + roomId) || '[]'); }
+  catch { return []; }
+}
 function claimTv(tvSlot) {
   emit('tv:claim', { tvSlot });
   myTvClaims.add(tvSlot);
+  _saveClaimedTvs();
 }
 function releaseTv(tvSlot) {
   emit('tv:release', { tvSlot });
   myTvClaims.delete(tvSlot);
+  _saveClaimedTvs();
 }
 
 // ─── CONTROLLER COLOR IDENTITY ────────────────────────────────────

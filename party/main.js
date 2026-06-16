@@ -484,9 +484,14 @@ export default class BjjTimerServer {
   }
 
   _buildMonitorStatus() {
+    const tvDisplays = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    for (const conn of this.room.getConnections('tv')) {
+      const s = conn.state;
+      if (s?.tvSlot >= 1 && s?.tvSlot <= 4) tvDisplays[s.tvSlot]++;
+    }
     return {
       tvOwner:    { ...this.tvOwner },
-      tvDisplays: { ...this.tvDisplays },
+      tvDisplays,
       floating:   this.floatingCount,
       ctrlNames:  { ...this.ctrlNames },
       ctrlSlots:  Object.fromEntries(
