@@ -99,6 +99,19 @@ export default class BjjTimerServer {
       const name      = decodeURIComponent(url.searchParams.get('name') || 'Unnamed Class');
       const color     = url.searchParams.get('color') || null;
       const profileId = url.searchParams.get('profileId') || null;
+
+      // Free any slots whose connection is no longer live (handles crashes,
+      // hibernation wakeup, and the setState race on abrupt disconnect).
+      const liveIds = new Set([...this.room.getConnections('controller')].map(c => c.id));
+      for (let i = 1; i <= 4; i++) {
+        const occupantId = this.ctrlSlots[i];
+        if (occupantId && !liveIds.has(occupantId)) {
+          delete this.controllers[occupantId];
+          this.ctrlSlots[i] = null;
+          this.ctrlNames[i] = '';
+        }
+      }
+
       const slot      = this._nextFreeCtrlSlot();
 
       if (!slot) {
@@ -106,11 +119,11 @@ export default class BjjTimerServer {
         connection.close();
         return;
       }
+      connection.setState({ role: 'controller', slot });
       this.ctrlSlots[slot] = connection.id;
       this.ctrlNames[slot] = name;
       const ctrlColor = color || CTRL_COLORS[slot];
       this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, connectedAt: Date.now(), userRole: auth?.role || null };
-      connection.setState({ role: 'controller', slot });
 
       connection.send(JSON.stringify({
         type:     'config',
