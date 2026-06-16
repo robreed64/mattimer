@@ -808,7 +808,6 @@ const state = {
   showRound: false, overlayMsg: '',
 };
 
-let timerInterval = null;
 let tvCodes = [];
 let branding = { appName: 'BJJ Mat Timer', tagline: 'Competition · Training · Sparring', logoDataUrl: '' };
 
@@ -1276,6 +1275,18 @@ function _onMessage(event) {
       if (msg.ctrlColor) myCtrlColor = msg.ctrlColor;
       applyBranding();
       applyControllerColor();
+      // Sync timer: if server already has a timer state (running or paused), apply it
+      // silently so we don't discard a paused mid-round position on reconnect.
+      // Only push local settings when the server has no timer state yet (fresh slot).
+      if (msg.timerState) {
+        applyControllerStateSnapshot(msg.timerState, { silent: true });
+      } else {
+        emit('timer:config', {
+          roundDuration: state.roundDuration, restDuration: state.restDuration,
+          totalRounds: state.totalRounds, warningEnabled: state.warningEnabled,
+          warningThreshold: state.warningThreshold, showRound: state.showRound,
+        });
+      }
       break;
     }
 
@@ -1355,7 +1366,12 @@ function _onMessage(event) {
       break;
     }
 
-    case 'state':   { if (mode === 'display') { const { type: _, ...s } = msg; applyStateSnapshot(s); } break; }
+    case 'state': {
+      const { type: _, ...s } = msg;
+      if (mode === 'display')    applyStateSnapshot(s);
+      else if (mode === 'controller') applyControllerStateSnapshot(s);
+      break;
+    }
     case 'overlay': { if (mode === 'display') showOverlay(msg.msg); break; }
     case 'branding': { branding = { ...branding, ...msg }; applyBranding(); break; }
     case 'tvCodes': {
@@ -1413,7 +1429,7 @@ function _onMessage(event) {
       if (mode !== 'display') break;
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const theme = SOUND_THEMES[msg.theme] || SOUND_THEMES.classic;
+        const theme = SOUND_THEMES[soundTheme] || SOUND_THEMES.classic;
         const play = () => {
           switch (msg.soundType) {
             case 'beep':   theme.countdownBeep(); break;
@@ -1519,105 +1535,86 @@ function getSlotColor(slot) {
 // ─── TIMER LOGIC ──────────────────────────────────────────────────
 function toggleStartPause() { state.running ? pauseTimer() : startTimer(); }
 
+function _updateStartPauseBtn() {
+  const btn = document.getElementById('startPauseBtn');
+  if (!btn) return;
+  if (state.running) {
+    btn.textContent = '⏸ Pause'; btn.className = 'btn btn-red btn-massive';
+  } else {
+    const resumed = state.timeRemaining > 0 && state.timeRemaining < state.roundDuration;
+    btn.textContent = resumed ? '▶ Resume' : '▶ Start';
+    btn.className = 'btn btn-green btn-massive';
+  }
+}
+
 function startTimer() {
-  state.running = true;
   getAudioCtx();
   const playedCustom = playCustomAudio('start');
-  if (!playedCustom) beep(660, 0.12, 'sine', 0.5);
-  emit('sound', { soundType: 'start' });
-  if (!timerInterval) timerInterval = setInterval(tick, 1000);
-  document.getElementById('startPauseBtn').textContent = '⏸ Pause';
-  document.getElementById('startPauseBtn').className = 'btn btn-red btn-massive';
-  broadcastState();
+  if (!playedCustom) SOUND_THEMES[soundTheme].startSound();
+  emit('timer:start');
+  // Optimistic UI — server state will confirm within one tick
+  state.running = true;
+  _updateStartPauseBtn(); updateUI();
 }
 
 function pauseTimer() {
+  emit('timer:pause');
   state.running = false;
-  clearInterval(timerInterval); timerInterval = null;
-  document.getElementById('startPauseBtn').textContent = '▶ Resume';
-  document.getElementById('startPauseBtn').className = 'btn btn-green btn-massive';
-  broadcastState();
-}
-
-function tick() {
-  if (!state.running) return;
-  const prev = state.timeRemaining;
-  state.timeRemaining--;
-  handleTickSounds(prev, state.timeRemaining);
-  if (state.timeRemaining <= 0) handlePhaseEnd();
-  else { throttledBroadcast(); updateUI(); }
-}
-
-let _lastBroadcast = 0;
-function throttledBroadcast() {
-  const now = Date.now();
-  if (now - _lastBroadcast > 900) { broadcastState(); _lastBroadcast = now; }
-}
-function broadcastState() { emit('state', { ...state }); }
-
-function handleTickSounds(prev, newTime) {
-  const beepOn = document.getElementById('soundBeepToggle')?.checked ?? true;
-  if (state.phase !== 'fight') return;
-  if (beepOn && newTime > 0 && newTime <= 10) {
-    if (newTime <= 3) { SOUND_THEMES[soundTheme].accentBeep(); emit('sound', { soundType: 'accent', theme: soundTheme }); }
-    else              { SOUND_THEMES[soundTheme].countdownBeep(); emit('sound', { soundType: 'beep', theme: soundTheme }); }
-  }
-}
-
-function handlePhaseEnd() {
-  const buzzerOn = document.getElementById('soundBuzzerToggle')?.checked ?? true;
-  if (state.phase === 'fight') {
-    const playedCustom = playCustomAudio('stop');
-    if (!playedCustom && buzzerOn) SOUND_THEMES[soundTheme].buzzerSound();
-    if (playedCustom || buzzerOn) emit('sound', { soundType: 'buzzer', theme: soundTheme });
-  }
-  if (state.phase === 'fight') {
-    if (state.currentRound >= state.totalRounds) {
-      state.running = false; state.timeRemaining = 0;
-      clearInterval(timerInterval); timerInterval = null;
-      document.getElementById('startPauseBtn').textContent = '▶ Start';
-      document.getElementById('startPauseBtn').className = 'btn btn-green btn-massive';
-      emit('overlay', { msg: 'TIME!' });
-      broadcastState();
-    } else if (state.restDuration > 0) {
-      state.phase = 'rest'; state.timeRemaining = state.restDuration;
-      const playedCustomRest = playCustomAudio('rest');
-      if (!playedCustomRest) SOUND_THEMES[soundTheme].restSound();
-      emit('sound', { soundType: 'rest', theme: soundTheme });
-      emit('overlay', { msg: 'REST' });
-    } else {
-      const playedCustomStart = playCustomAudio('start');
-      if (!playedCustomStart) SOUND_THEMES[soundTheme].startSound();
-      emit('sound', { soundType: 'start', theme: soundTheme });
-      nextRound();
-    }
-  } else {
-    state.currentRound++; state.phase = 'fight'; state.timeRemaining = state.roundDuration;
-    const playedCustomStart = playCustomAudio('start');
-    if (!playedCustomStart) SOUND_THEMES[soundTheme].startSound();
-    emit('sound', { soundType: 'start', theme: soundTheme });
-    emit('overlay', { msg: 'FIGHT!' });
-    setTimeout(() => emit('overlay', { msg: '' }), 2500);
-  }
-  updateUI(); broadcastState();
+  _updateStartPauseBtn(); updateUI();
 }
 
 function resetTimer() {
-  clearInterval(timerInterval); timerInterval = null;
+  emit('timer:reset');
   state.running = false; state.currentRound = 1; state.phase = 'fight';
   state.timeRemaining = state.roundDuration;
-  document.getElementById('startPauseBtn').textContent = '▶ Start';
-  document.getElementById('startPauseBtn').className = 'btn btn-green btn-massive';
-  updateUI(); broadcastState(); emit('overlay', { msg: '' });
+  _updateStartPauseBtn(); updateUI();
 }
 
 function nextRound() {
+  emit('timer:nextRound');
+  state.running = false;
   if (state.currentRound < state.totalRounds) state.currentRound++;
-  state.phase = 'fight'; state.timeRemaining = state.roundDuration; state.running = false;
-  clearInterval(timerInterval); timerInterval = null;
-  document.getElementById('startPauseBtn').textContent = '▶ Start';
-  document.getElementById('startPauseBtn').className = 'btn btn-green btn-massive';
-  updateUI(); broadcastState();
+  state.phase = 'fight'; state.timeRemaining = state.roundDuration;
+  _updateStartPauseBtn(); updateUI();
+}
+
+// Applies state received from the server to the controller UI and plays sounds
+// for phase transitions. Pass silent:true on initial load to skip sounds.
+function applyControllerStateSnapshot(s, { silent = false } = {}) {
+  const prevPhase   = state.phase;
+  const prevRunning = state.running;
+  const prevRound   = state.currentRound;
+  Object.assign(state, s);
+
+  if (!silent) {
+    const beepOn   = document.getElementById('soundBeepToggle')?.checked ?? true;
+    const buzzerOn = document.getElementById('soundBuzzerToggle')?.checked ?? true;
+
+    // Countdown beeps (server also sends these to TVs; controller plays locally)
+    if (s.phase === 'fight' && s.running && s.timeRemaining > 0 && s.timeRemaining <= 10 && beepOn) {
+      if (s.timeRemaining <= 3) SOUND_THEMES[soundTheme].accentBeep();
+      else                      SOUND_THEMES[soundTheme].countdownBeep();
+    }
+    // Fight → rest
+    if (prevPhase === 'fight' && s.phase === 'rest') {
+      if (buzzerOn) { const pc = playCustomAudio('stop'); if (!pc) SOUND_THEMES[soundTheme].buzzerSound(); }
+      const pr = playCustomAudio('rest'); if (!pr) SOUND_THEMES[soundTheme].restSound();
+    }
+    // Rest → fight (start of new round)
+    if (prevPhase === 'rest' && s.phase === 'fight') {
+      const ps = playCustomAudio('start'); if (!ps) SOUND_THEMES[soundTheme].startSound();
+    }
+    // Fight → fight, new round with no rest period
+    if (prevPhase === 'fight' && s.phase === 'fight' && s.currentRound > prevRound && prevRunning) {
+      const ps = playCustomAudio('start'); if (!ps) SOUND_THEMES[soundTheme].startSound();
+    }
+    // Timer fully ended (fight, last round, running→stopped)
+    if (prevRunning && !s.running && s.timeRemaining === 0) {
+      if (buzzerOn) { const pc = playCustomAudio('stop'); if (!pc) SOUND_THEMES[soundTheme].buzzerSound(); }
+    }
+  }
+
+  updateUI(); _updateStartPauseBtn();
 }
 
 // ─── SETTINGS MODAL ───────────────────────────────────────────────
@@ -1638,7 +1635,8 @@ function setDurationMin(min) {
   document.querySelectorAll('.dur-pill').forEach((b, i) => {
     b.classList.toggle('active', i + 1 === min);
   });
-  updateUI(); broadcastState();
+  updateUI();
+  emit('timer:config', { roundDuration: state.roundDuration });
   if (_pendingProfile?.id) {
     emit('profile:save', { profileId: _pendingProfile.id, settings: { roundDuration: state.roundDuration } });
   }
@@ -1654,7 +1652,12 @@ function updateConfig() {
   state.warningEnabled   = document.getElementById('warningToggle').checked;
   state.warningThreshold = parseInt(document.getElementById('warningThreshold').value)||30;
   state.showRound        = document.getElementById('showRoundToggle').checked;
-  updateUI(); broadcastState();
+  updateUI();
+  emit('timer:config', {
+    roundDuration: state.roundDuration, restDuration: state.restDuration,
+    totalRounds: state.totalRounds, warningEnabled: state.warningEnabled,
+    warningThreshold: state.warningThreshold, showRound: state.showRound,
+  });
   // Auto-save settings back to profile
   if (_pendingProfile?.id) {
     emit('profile:save', {

@@ -31,7 +31,9 @@ export default class BjjTimerServer {
     this.tvDisplays   = { 1: 0,   2: 0,   3: 0,   4: 0    };
     this.floatingCount = 0;
     this.config = null;
-    this.lastState    = { 1: null, 2: null, 3: null, 4: null }; // last state per ctrl slot
+    this.timerStates   = { 1: null, 2: null, 3: null, 4: null }; // server-owned timer per ctrl slot
+    this.ctrlIdentities = { 1: null, 2: null, 3: null, 4: null }; // persists across disconnects for reconnect detection
+    this._alarmPending = false; // track alarm so we don't double-schedule
   }
 
   async onStart() {
@@ -57,6 +59,15 @@ export default class BjjTimerServer {
       if (!this.config.branding) { this.config.branding = { appName: 'BJJ Mat Timer', tagline: 'Competition · Training · Sparring', logoDataUrl: '' }; changed = true; }
       if (changed) await this.room.storage.put('config', this.config);
     }
+    // Load persisted timer states and controller identities (survive DO hibernation)
+    for (let i = 1; i <= 4; i++) {
+      const ts = await this.room.storage.get('timerState:' + i);
+      if (ts) this.timerStates[i] = ts;
+      const id = await this.room.storage.get('ctrlIdentity:' + i);
+      if (id) this.ctrlIdentities[i] = id;
+    }
+    // Ensure alarm is running for any timers recovered from storage
+    if (this._hasAnyRunning()) await this._scheduleAlarm();
   }
 
   getConnectionTags(connection, ctx) {
@@ -103,34 +114,51 @@ export default class BjjTimerServer {
 
       const authSub = auth?.sub || null;
 
-      // Sweep dead connections (crash / hibernation wakeup).
+      // Identity takeover: check ctrlIdentities first (persists across disconnects and
+      // hibernation) so a reconnecting coach reclaims their slot even if the old
+      // WebSocket already closed before this connect arrived.
+      let isTakeover = false;
+      let takeoverSlot = null;
+      for (let i = 1; i <= 4; i++) {
+        const id = this.ctrlIdentities[i];
+        if (!id) continue;
+        if ((authSub && id.authSub === authSub) ||
+            (profileId && id.profileId === profileId) ||
+            (clientId && id.clientId === clientId)) {
+          if (this.ctrlSlots[i]) {
+            const old = [...this.room.getConnections('controller')].find(c => c.id === this.ctrlSlots[i]);
+            if (old) old.close();
+            this._freeCtrlSlot(i);
+          }
+          isTakeover = true;
+          takeoverSlot = i;
+          break;
+        }
+      }
+
+      // Sweep dead connections (crash / hibernation wakeup) — after takeover check.
       const liveIds = new Set([...this.room.getConnections('controller')].map(c => c.id));
       for (let i = 1; i <= 4; i++) {
         if (this.ctrlSlots[i] && !liveIds.has(this.ctrlSlots[i])) this._freeCtrlSlot(i);
       }
 
-      // Identity takeover: same user or profile reconnecting (e.g. page refresh)
-      // evicts the stale slot rather than consuming a new one.
-      for (let i = 1; i <= 4; i++) {
-        const occupant = this.controllers[this.ctrlSlots[i]];
-        if (!occupant) continue;
-        if ((authSub && occupant.authSub === authSub) ||
-            (profileId && occupant.profileId === profileId) ||
-            (clientId && occupant.clientId === clientId)) {
-          const old = [...this.room.getConnections('controller')].find(c => c.id === this.ctrlSlots[i]);
-          if (old) old.close();
-          this._freeCtrlSlot(i);
-          break;
-        }
-      }
-
-      const slot      = this._nextFreeCtrlSlot();
+      // Takeover: reclaim the exact same slot so the timer state is preserved.
+      const slot = (takeoverSlot && !this.ctrlSlots[takeoverSlot])
+        ? takeoverSlot
+        : this._nextFreeCtrlSlot();
 
       if (!slot) {
         connection.send(JSON.stringify({ type: 'error', msg: 'All 4 controller slots are full' }));
         connection.close();
         return;
       }
+      // Fresh controller gets a clean timer state; reconnecting controller keeps theirs
+      if (!isTakeover || !this.timerStates[slot]) {
+        this.timerStates[slot] = this._newTimerState();
+      }
+      // Persist identity so reconnect detection survives DO hibernation
+      this.ctrlIdentities[slot] = { authSub, profileId, clientId };
+      await this.room.storage.put('ctrlIdentity:' + slot, { authSub, profileId, clientId });
       const ctrlColor = color || CTRL_COLORS[slot];
       this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };
       this.ctrlSlots[slot] = connection.id;
@@ -138,11 +166,12 @@ export default class BjjTimerServer {
       connection.setState({ role: 'controller', slot });
 
       connection.send(JSON.stringify({
-        type:     'config',
-        tvCodes:  this.config.tvCodes,
-        profiles: this._safeProfiles(),
-        branding: this.config.branding,
-        ctrlSlot: slot, ctrlColor, ctrlName: name,
+        type:       'config',
+        tvCodes:    this.config.tvCodes,
+        profiles:   this._safeProfiles(),
+        branding:   this.config.branding,
+        ctrlSlot:   slot, ctrlColor, ctrlName: name,
+        timerState: this._computeCurrentState(slot),
       }));
       connection.send(JSON.stringify({ type: 'monitor:status', ...this._buildMonitorStatus() }));
       this._broadcastMonitorStatus();
@@ -170,9 +199,10 @@ export default class BjjTimerServer {
         color: ownerSlot ? CTRL_COLORS[ownerSlot] : null,
         name:  ownerSlot ? (this.ctrlNames[ownerSlot] || null) : null,
       }));
-      // Send last known state so TV immediately reflects current settings
-      if (ownerSlot && this.lastState[ownerSlot]) {
-        connection.send(JSON.stringify({ type: 'state', ...this.lastState[ownerSlot] }));
+      // Send current state (computed live from server timer) so TV is immediately accurate
+      if (ownerSlot) {
+        const current = this._computeCurrentState(ownerSlot);
+        if (current) connection.send(JSON.stringify({ type: 'state', ...current }));
       }
       this._broadcastMonitorStatus();
 
@@ -212,7 +242,7 @@ export default class BjjTimerServer {
     this._broadcastMonitorStatus();
   }
 
-  onMessage(message, sender) {
+  async onMessage(message, sender) {
     let msg;
     try { msg = JSON.parse(message); } catch { return; }
     const ctrl = this.controllers[sender.id];
@@ -245,10 +275,9 @@ export default class BjjTimerServer {
         if (!ctrl || msg.tvSlot < 1 || msg.tvSlot > 4) return;
         this.tvOwner[msg.tvSlot] = ctrl.slot;
         this._sendToTv(msg.tvSlot, JSON.stringify({ type: 'ctrl:color', color: ctrl.color, name: this.ctrlNames[ctrl.slot] }));
-        // Send current state so TV immediately reflects controller settings
-        if (this.lastState[ctrl.slot]) {
-          this._sendToTv(msg.tvSlot, JSON.stringify({ type: 'state', ...this.lastState[ctrl.slot] }));
-        }
+        // Send live timer state so TV is immediately accurate
+        const tvState = this._computeCurrentState(ctrl.slot);
+        if (tvState) this._sendToTv(msg.tvSlot, JSON.stringify({ type: 'state', ...tvState }));
         this._broadcastMonitorStatus();
         break;
       }
@@ -261,21 +290,75 @@ export default class BjjTimerServer {
         break;
       }
 
-      case 'state':
+      // Overlay, tab, and stopwatch messages are still forwarded from the controller
       case 'overlay':
       case 'tab':
-      case 'sw:state':
-      case 'sound': {
+      case 'sw:state': {
         if (!ctrl) return;
-        // Cache latest timer state so new TV connections get it immediately
-        if (msg.type === 'state') {
-          const { type: _, ...stateData } = msg;
-          this.lastState[ctrl.slot] = stateData;
+        this._sendToTvs(ctrl.slot, JSON.stringify(msg));
+        break;
+      }
+
+      case 'timer:start': {
+        if (!ctrl) return;
+        const ts = this.timerStates[ctrl.slot] || (this.timerStates[ctrl.slot] = this._newTimerState());
+        if (ts.running) return;
+        ts.running = true; ts.startedAt = Date.now(); ts.timeRemainingAtStart = ts.timeRemaining;
+        this._broadcastTimerState(ctrl.slot);
+        this._sendSoundToTvs(ctrl.slot, 'start');
+        await this.room.storage.put('timerState:' + ctrl.slot, ts);
+        await this._scheduleAlarm();
+        break;
+      }
+
+      case 'timer:pause': {
+        if (!ctrl) return;
+        const ts = this.timerStates[ctrl.slot];
+        if (!ts?.running) return;
+        const elapsed = Math.floor((Date.now() - ts.startedAt) / 1000);
+        ts.timeRemaining = Math.max(0, ts.timeRemainingAtStart - elapsed);
+        ts.running = false; ts.startedAt = null; ts.timeRemainingAtStart = 0;
+        this._broadcastTimerState(ctrl.slot);
+        await this.room.storage.put('timerState:' + ctrl.slot, ts);
+        break;
+      }
+
+      case 'timer:reset': {
+        if (!ctrl) return;
+        const ts = this.timerStates[ctrl.slot];
+        if (!ts) return;
+        ts.running = false; ts.currentRound = 1; ts.phase = 'fight';
+        ts.timeRemaining = ts.roundDuration; ts.startedAt = null; ts.timeRemainingAtStart = 0;
+        this._broadcastTimerState(ctrl.slot);
+        this._sendToTvs(ctrl.slot, JSON.stringify({ type: 'overlay', msg: '' }));
+        await this.room.storage.put('timerState:' + ctrl.slot, ts);
+        break;
+      }
+
+      case 'timer:nextRound': {
+        if (!ctrl) return;
+        const ts = this.timerStates[ctrl.slot];
+        if (!ts) return;
+        ts.running = false; ts.startedAt = null; ts.timeRemainingAtStart = 0;
+        if (ts.currentRound < ts.totalRounds) ts.currentRound++;
+        ts.phase = 'fight'; ts.timeRemaining = ts.roundDuration;
+        this._broadcastTimerState(ctrl.slot);
+        await this.room.storage.put('timerState:' + ctrl.slot, ts);
+        break;
+      }
+
+      case 'timer:config': {
+        if (!ctrl) return;
+        const ts = this.timerStates[ctrl.slot] || (this.timerStates[ctrl.slot] = this._newTimerState());
+        const allowed = ['roundDuration','restDuration','totalRounds','warningEnabled','warningThreshold','showRound'];
+        for (const k of allowed) { if (msg[k] !== undefined) ts[k] = msg[k]; }
+        if (!ts.running) {
+          // Clamp paused position if roundDuration shrank below it; never unconditionally reset
+          if (ts.timeRemaining > ts.roundDuration) ts.timeRemaining = ts.roundDuration;
+          ts.startedAt = null; ts.timeRemainingAtStart = 0;
         }
-        const fwd = JSON.stringify(msg);
-        for (let tv = 1; tv <= 4; tv++) {
-          if (this.tvOwner[tv] === ctrl.slot) this._sendToTv(tv, fwd);
-        }
+        this._broadcastTimerState(ctrl.slot);
+        await this.room.storage.put('timerState:' + ctrl.slot, ts);
         break;
       }
 
@@ -511,5 +594,127 @@ export default class BjjTimerServer {
 
   _broadcastProfilesUpdated() {
     this.room.broadcast(JSON.stringify({ type: 'profiles:updated', profiles: this._safeProfiles() }));
+  }
+
+  // ─── Server-side timer ───────────────────────────────────────────
+
+  async alarm() {
+    this._alarmPending = false;
+    const now = Date.now();
+    for (let slot = 1; slot <= 4; slot++) {
+      // Recover in-memory state after DO hibernation
+      if (!this.timerStates[slot]) {
+        const saved = await this.room.storage.get('timerState:' + slot);
+        if (saved) this.timerStates[slot] = saved;
+      }
+      const ts = this.timerStates[slot];
+      if (!ts?.running || !ts.startedAt) continue;
+      const elapsed = Math.floor((now - ts.startedAt) / 1000);
+      ts.timeRemaining = ts.timeRemainingAtStart - elapsed;
+      if (ts.timeRemaining <= 0) {
+        await this._handlePhaseEnd(slot);
+      } else {
+        if (ts.phase === 'fight' && ts.timeRemaining <= 10) {
+          this._sendSoundToTvs(slot, ts.timeRemaining <= 3 ? 'accent' : 'beep');
+        }
+        this._broadcastTimerState(slot);
+      }
+    }
+    if (this._hasAnyRunning()) {
+      this._alarmPending = true;
+      await this.room.storage.setAlarm(Date.now() + 1000);
+    }
+  }
+
+  _hasAnyRunning() {
+    for (let i = 1; i <= 4; i++) { if (this.timerStates[i]?.running) return true; }
+    return false;
+  }
+
+  async _scheduleAlarm() {
+    if (this._alarmPending) return;
+    this._alarmPending = true;
+    await this.room.storage.setAlarm(Date.now() + 1000);
+  }
+
+  _newTimerState() {
+    return {
+      running: false, phase: 'fight', currentRound: 1,
+      roundDuration: 300, restDuration: 60, totalRounds: 10,
+      timeRemaining: 300, warningEnabled: true, warningThreshold: 30,
+      showRound: false, startedAt: null, timeRemainingAtStart: 0,
+    };
+  }
+
+  _computeCurrentState(slot) {
+    const ts = this.timerStates[slot];
+    if (!ts) return null;
+    const { startedAt, timeRemainingAtStart, ...s } = ts;
+    if (ts.running && startedAt) {
+      s.timeRemaining = Math.max(0, timeRemainingAtStart - Math.floor((Date.now() - startedAt) / 1000));
+    }
+    return s;
+  }
+
+  async _handlePhaseEnd(slot) {
+    const ts = this.timerStates[slot];
+    if (!ts) return;
+    if (ts.phase === 'fight') {
+      this._sendSoundToTvs(slot, 'buzzer');
+      if (ts.currentRound >= ts.totalRounds) {
+        ts.running = false; ts.timeRemaining = 0; ts.startedAt = null; ts.timeRemainingAtStart = 0;
+        this._sendToTvs(slot, JSON.stringify({ type: 'overlay', msg: 'TIME!' }));
+        this._broadcastTimerState(slot);
+        await this.room.storage.delete('timerState:' + slot);
+      } else if (ts.restDuration > 0) {
+        ts.phase = 'rest'; ts.timeRemaining = ts.restDuration;
+        ts.startedAt = Date.now(); ts.timeRemainingAtStart = ts.restDuration;
+        this._sendSoundToTvs(slot, 'rest');
+        this._sendToTvs(slot, JSON.stringify({ type: 'overlay', msg: 'REST' }));
+        this._broadcastTimerState(slot);
+        await this.room.storage.put('timerState:' + slot, ts);
+      } else {
+        ts.currentRound++; ts.phase = 'fight'; ts.timeRemaining = ts.roundDuration;
+        ts.startedAt = Date.now(); ts.timeRemainingAtStart = ts.roundDuration;
+        this._sendSoundToTvs(slot, 'start');
+        this._sendToTvs(slot, JSON.stringify({ type: 'overlay', msg: 'FIGHT!' }));
+        this._broadcastTimerState(slot);
+        await this.room.storage.put('timerState:' + slot, ts);
+      }
+    } else {
+      // Rest phase ended — start next fight round
+      ts.currentRound++; ts.phase = 'fight'; ts.timeRemaining = ts.roundDuration;
+      ts.startedAt = Date.now(); ts.timeRemainingAtStart = ts.roundDuration;
+      this._sendSoundToTvs(slot, 'start');
+      this._sendToTvs(slot, JSON.stringify({ type: 'overlay', msg: 'FIGHT!' }));
+      this._broadcastTimerState(slot);
+      await this.room.storage.put('timerState:' + slot, ts);
+    }
+  }
+
+  _broadcastTimerState(slot) {
+    const current = this._computeCurrentState(slot);
+    if (!current) return;
+    const msg = JSON.stringify({ type: 'state', ...current });
+    this._sendToTvs(slot, msg);
+    this._sendToCtrl(slot, msg);
+  }
+
+  _sendToCtrl(slot, msg) {
+    const connId = this.ctrlSlots[slot];
+    if (!connId) return;
+    for (const conn of this.room.getConnections('controller')) {
+      if (conn.id === connId) { conn.send(msg); return; }
+    }
+  }
+
+  _sendToTvs(slot, msg) {
+    for (let tv = 1; tv <= 4; tv++) {
+      if (this.tvOwner[tv] === slot) this._sendToTv(tv, msg);
+    }
+  }
+
+  _sendSoundToTvs(slot, soundType) {
+    this._sendToTvs(slot, JSON.stringify({ type: 'sound', soundType }));
   }
 }
