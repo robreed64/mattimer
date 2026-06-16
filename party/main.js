@@ -100,21 +100,25 @@ export default class BjjTimerServer {
       const color     = url.searchParams.get('color') || null;
       const profileId = url.searchParams.get('profileId') || null;
 
-      // Free any slots whose connection is no longer live (handles crashes,
-      // hibernation wakeup, and the setState race on abrupt disconnect).
+      const authSub = auth?.sub || null;
+
+      // Sweep dead connections (crash / hibernation wakeup).
       const liveIds = new Set([...this.room.getConnections('controller')].map(c => c.id));
       for (let i = 1; i <= 4; i++) {
-        const occupantId = this.ctrlSlots[i];
-        if (occupantId && !liveIds.has(occupantId)) {
-          delete this.controllers[occupantId];
-          this.ctrlSlots[i] = null;
-          this.ctrlNames[i] = '';
-          for (let tv = 1; tv <= 4; tv++) {
-            if (this.tvOwner[tv] === i) {
-              this.tvOwner[tv] = null;
-              this._sendToTv(tv, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
-            }
-          }
+        if (this.ctrlSlots[i] && !liveIds.has(this.ctrlSlots[i])) this._freeCtrlSlot(i);
+      }
+
+      // Identity takeover: same user or profile reconnecting (e.g. page refresh)
+      // evicts the stale slot rather than consuming a new one.
+      for (let i = 1; i <= 4; i++) {
+        const occupant = this.controllers[this.ctrlSlots[i]];
+        if (!occupant) continue;
+        if ((authSub && occupant.authSub === authSub) ||
+            (profileId && occupant.profileId === profileId)) {
+          const old = [...this.room.getConnections('controller')].find(c => c.id === this.ctrlSlots[i]);
+          if (old) old.close();
+          this._freeCtrlSlot(i);
+          break;
         }
       }
 
@@ -126,7 +130,7 @@ export default class BjjTimerServer {
         return;
       }
       const ctrlColor = color || CTRL_COLORS[slot];
-      this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, connectedAt: Date.now(), userRole: auth?.role || null };
+      this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, authSub, connectedAt: Date.now(), userRole: auth?.role || null };
       this.ctrlSlots[slot] = connection.id;
       this.ctrlNames[slot] = name;
       connection.setState({ role: 'controller', slot });
@@ -187,21 +191,13 @@ export default class BjjTimerServer {
       const ctrl = this.controllers[connection.id];
       if (ctrl) {
         const { slot } = ctrl;
-        this.ctrlSlots[slot] = null;
-        this.ctrlNames[slot] = '';
-        delete this.controllers[connection.id];
-        for (let tv = 1; tv <= 4; tv++) {
-          if (this.tvOwner[tv] === slot) {
-            this.tvOwner[tv] = null;
-            this._sendToTv(tv, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
-          }
-        }
         const duration = Math.round((Date.now() - (ctrl.connectedAt || Date.now())) / 1000);
+        this._freeCtrlSlot(slot);
         // Platform-admin visits aren't real classes — keep them out of Recent activity
         if (duration > 30 && ctrl.userRole !== 'admin') {
           (async () => {
             const sessions = (await this.room.storage.get('sessions')) || [];
-            sessions.push({ date: new Date(ctrl.connectedAt).toISOString(), name: ctrl.name, slot: ctrl.slot, duration });
+            sessions.push({ date: new Date(ctrl.connectedAt).toISOString(), name: ctrl.name, slot, duration });
             if (sessions.length > 100) sessions.splice(0, sessions.length - 100);
             await this.room.storage.put('sessions', sessions);
           })();
@@ -460,6 +456,20 @@ export default class BjjTimerServer {
   _nextFreeCtrlSlot() {
     for (let i = 1; i <= 4; i++) if (!this.ctrlSlots[i]) return i;
     return null;
+  }
+
+  _freeCtrlSlot(slot) {
+    const occupantId = this.ctrlSlots[slot];
+    if (!occupantId) return;
+    delete this.controllers[occupantId];
+    this.ctrlSlots[slot] = null;
+    this.ctrlNames[slot] = '';
+    for (let tv = 1; tv <= 4; tv++) {
+      if (this.tvOwner[tv] === slot) {
+        this.tvOwner[tv] = null;
+        this._sendToTv(tv, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
+      }
+    }
   }
 
   _sendToTv(tvSlot, msg) {
