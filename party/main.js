@@ -186,7 +186,7 @@ export default class BjjTimerServer {
       }
       connection.setState({ role: 'controller', slot: primary, mats: bound.slice() });
 
-      connection.send(JSON.stringify({
+      this._safeSend(connection, JSON.stringify({
         type:       'config',
         tvCodes:    this.config.tvCodes,
         profiles:   this._safeProfiles(),
@@ -216,16 +216,16 @@ export default class BjjTimerServer {
         if (c.id !== connection.id && c.state?.tvSlot === mat) { try { c.close(); } catch {} }
       }
       connection.setState({ role: 'tv', tvSlot: mat });
-      connection.send(JSON.stringify({ type: 'branding', ...this.config.branding }));
+      this._safeSend(connection, JSON.stringify({ type: 'branding', ...this.config.branding }));
       // Always reflect the mat's current controlling coach + live timer on connect.
       const ctrl = this.ctrlSlots[mat] ? this.controllers[this.ctrlSlots[mat]] : null;
-      connection.send(JSON.stringify({
+      this._safeSend(connection, JSON.stringify({
         type:  'ctrl:color',
         color: ctrl ? (ctrl.color || CTRL_COLORS[mat]) : null,
         name:  ctrl ? (this.ctrlNames[mat] || null) : null,
       }));
       const current = this._tvStateForMat(mat);
-      if (current) connection.send(JSON.stringify({ type: 'state', ...current }));
+      if (current) this._safeSend(connection, JSON.stringify({ type: 'state', ...current }));
       this._broadcastMatStatus();
 
     } else {
@@ -556,17 +556,25 @@ export default class BjjTimerServer {
     this._sendToTv(slot, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
   }
 
+  // Sending to a connection that just closed (stale/flapping TV, a phone that
+  // walked out of range) throws and would otherwise abort the whole handler
+  // mid-connect, leaving TVs stuck reconnecting. Always send defensively.
+  _safeSend(conn, msg) {
+    try { conn.send(msg); } catch (e) {}
+  }
+
   // Send a message to every TV pinned to the given mat.
   _sendToTv(mat, msg) {
     for (const conn of this.room.getConnections('tv')) {
-      if (conn.state?.tvSlot === mat) conn.send(msg);
+      if (conn.state?.tvSlot === mat) this._safeSend(conn, msg);
     }
   }
 
-  // Per-mat occupancy, broadcast to everyone (controllers + the mat picker)
-  // so coaches can see which mats are open vs. in use.
+  // Per-mat occupancy, sent to everyone (controllers + the mat picker) so
+  // coaches can see which mats are open vs. in use.
   _broadcastMatStatus() {
-    this.room.broadcast(JSON.stringify({ type: 'mat:status', mats: this._buildMatStatus() }));
+    const msg = JSON.stringify({ type: 'mat:status', mats: this._buildMatStatus() });
+    for (const conn of this.room.getConnections()) this._safeSend(conn, msg);
   }
 
   _buildMatStatus() {
@@ -729,7 +737,7 @@ export default class BjjTimerServer {
     const connId = this.ctrlSlots[slot];
     if (!connId) return;
     for (const conn of this.room.getConnections('controller')) {
-      if (conn.id === connId) { conn.send(msg); return; }
+      if (conn.id === connId) { this._safeSend(conn, msg); return; }
     }
   }
 

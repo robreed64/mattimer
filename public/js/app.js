@@ -2191,6 +2191,16 @@ function hideConnecting() { if (connectingEl) { connectingEl.remove(); connectin
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 
+  // Seamless updates: when a freshly-deployed service worker installs, tell it
+  // to take over immediately; when it does, reload once so the page runs the
+  // new code instead of stale cached JS. (Prevents the "old client" problem.)
+  let _swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_swReloaded) return;
+    _swReloaded = true;
+    location.reload();
+  });
+
   // Listen for messages from SW (last known state response)
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data?.type === 'LAST_STATE' && e.data.state && mode === 'display') {
