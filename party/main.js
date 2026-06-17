@@ -560,7 +560,7 @@ export default class BjjTimerServer {
   // walked out of range) throws and would otherwise abort the whole handler
   // mid-connect, leaving TVs stuck reconnecting. Always send defensively.
   _safeSend(conn, msg) {
-    try { conn.send(msg); } catch (e) {}
+    try { conn.send(msg); } catch {}
   }
 
   // Send a message to every TV pinned to the given mat.
