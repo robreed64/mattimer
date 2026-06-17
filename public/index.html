@@ -17,7 +17,7 @@
 <script src="/partykit-config.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="/css/main.css?v=14">
+<link rel="stylesheet" href="/css/main.css?v=15">
 </head>
 <body>
 
@@ -296,6 +296,36 @@
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeCreateProfile()">Cancel</button>
       <button class="btn btn-gold" onclick="submitCreateProfile()">Create &amp; Login</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── EDIT PROFILE MODAL ────────────────────────────────────────── -->
+<div id="editProfileModal" class="modal-backdrop" style="display:none" onclick="closeEditProfile(event)">
+  <div class="modal-box" style="max-width:380px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">Edit Profile</span>
+      <button class="modal-close" onclick="closeEditProfile()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label>Name <span style="color:var(--mat-muted);font-weight:400">(coach name or class title)</span></label>
+        <input type="text" id="editProfileName" maxlength="40"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1.05rem;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+      </div>
+      <div class="modal-field">
+        <label>New PIN <span style="color:var(--mat-muted);font-weight:400">(leave blank to keep current)</span></label>
+        <input type="password" id="editProfilePin" placeholder="New PIN" maxlength="20" inputmode="numeric"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;letter-spacing:.3em;text-align:center;padding:.6rem 1rem;outline:none;width:100%;transition:border-color .2s"
+          onkeydown="if(event.key==='Enter')submitEditProfile()"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+        <button type="button" class="btn btn-outline" style="font-size:.78rem;padding:.4rem .6rem;margin-top:.5rem" onclick="removeProfilePin()">Remove PIN (no PIN required)</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeEditProfile()">Cancel</button>
+      <button class="btn btn-gold" onclick="submitEditProfile()">Save</button>
     </div>
   </div>
 </div>
@@ -711,7 +741,7 @@
   </div>
 </div>
 
-<script src="/js/app.js?v=14"></script>
+<script src="/js/app.js?v=15"></script>
 
 </body>
 </html>

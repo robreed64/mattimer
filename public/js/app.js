@@ -1217,6 +1217,7 @@ function renderProfileGrid() {
   grid.innerHTML = profiles.map(p => `
     <div class="profile-card" onclick="selectProfile('${p.id}')" style="border-color:${p.color}44">
       <div class="profile-color-bar" style="background:${p.color}"></div>
+      <button class="profile-edit" onclick="event.stopPropagation();openEditProfile('${p.id}')" title="Edit name / change PIN">✎</button>
       <button class="profile-delete" onclick="event.stopPropagation();deleteProfile('${p.id}')" title="Delete">✕</button>
       <div class="profile-name">${escHtml(p.name)}</div>
       <div class="profile-meta">${p.hasPin ? '🔒 PIN protected' : 'No PIN'}</div>
@@ -1242,6 +1243,68 @@ async function deleteProfile(id) {
   await partyFetch('/api/profiles/' + id, { method: 'DELETE' });
   await loadProfiles();
   renderProfileGrid();
+}
+
+// ─── EDIT PROFILE (rename / change PIN) ───────────────────────────
+let _editProfileId = null;
+
+function openEditProfile(id) {
+  const profile = profiles.find(p => p.id === id);
+  if (!profile) return;
+  _editProfileId = id;
+  document.getElementById('profilePickerModal').style.display = 'none';
+  document.getElementById('editProfileName').value = profile.name || '';
+  document.getElementById('editProfilePin').value = '';
+  document.getElementById('editProfilePin').placeholder = profile.hasPin ? 'New PIN (current kept if blank)' : 'Set a PIN';
+  document.getElementById('editProfileModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('editProfileName').focus(), 80);
+}
+
+function closeEditProfile(e) {
+  if (e && e.target !== document.getElementById('editProfileModal')) return;
+  document.getElementById('editProfileModal').style.display = 'none';
+  _editProfileId = null;
+  openProfilePicker();
+}
+
+async function submitEditProfile() {
+  if (!_editProfileId) return;
+  const name = document.getElementById('editProfileName').value.trim();
+  const pin  = document.getElementById('editProfilePin').value.trim();
+  if (!name) { document.getElementById('editProfileName').focus(); return; }
+  const body = { name };
+  if (pin) body.pin = pin; // blank = keep current PIN
+  const res = await partyFetch('/api/profiles/' + _editProfileId, {
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = res.status; try { detail = (await res.json()).error || res.status; } catch {}
+    toast('Could not save profile: ' + detail); return;
+  }
+  document.getElementById('editProfileModal').style.display = 'none';
+  _editProfileId = null;
+  await loadProfiles();
+  toast(pin ? '✓ PIN updated' : '✓ Profile saved');
+  openProfilePicker();
+}
+
+async function removeProfilePin() {
+  if (!_editProfileId) return;
+  if (!confirm('Remove the PIN? Anyone will be able to use this profile without one.')) return;
+  const name = document.getElementById('editProfileName').value.trim();
+  const res = await partyFetch('/api/profiles/' + _editProfileId, {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name: name || undefined, pin: '' }), // empty pin clears it
+  });
+  if (!res.ok) {
+    let detail = res.status; try { detail = (await res.json()).error || res.status; } catch {}
+    toast('Could not remove PIN: ' + detail); return;
+  }
+  document.getElementById('editProfileModal').style.display = 'none';
+  _editProfileId = null;
+  await loadProfiles();
+  toast('✓ PIN removed');
+  openProfilePicker();
 }
 
 function openCreateProfile() {

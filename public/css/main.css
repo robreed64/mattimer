@@ -395,6 +395,9 @@
   .profile-card .profile-delete { position: absolute; top: .4rem; left: .4rem; background: none; border: none; color: transparent; font-size: .75rem; cursor: pointer; padding: .1rem .3rem; border-radius: 3px; transition: all .15s; }
   .profile-card:hover .profile-delete { color: var(--mat-muted); }
   .profile-card .profile-delete:hover { color: var(--mat-red) !important; background: rgba(192,57,43,.15); }
+  .profile-card .profile-edit { position: absolute; top: .4rem; right: .4rem; background: none; border: none; color: transparent; font-size: .8rem; cursor: pointer; padding: .1rem .3rem; border-radius: 3px; transition: all .15s; }
+  .profile-card:hover .profile-edit { color: var(--mat-muted); }
+  .profile-card .profile-edit:hover { color: var(--mat-gold) !important; background: rgba(212,160,23,.15); }
 
   /* ─── UTILITY ──────────────────────────────────────────────── */
   .hidden { display: none !important; }
