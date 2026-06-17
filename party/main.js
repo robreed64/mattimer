@@ -29,6 +29,7 @@ export default class BjjTimerServer {
     this.controllers  = {};                                    // connId -> { slot, color, name, clientId, ... }
     this.ctrlSlots    = { 1: null, 2: null, 3: null, 4: null }; // mat -> controlling connId
     this.ctrlNames    = { 1: '',   2: '',   3: '',   4: ''   }; // mat -> controlling coach name
+    this.matClientId  = { 1: null, 2: null, 3: null, 4: null }; // mat -> clientId that last held it (for reclaim detection)
     this.config = null;
     this.timerStates  = { 1: null, 2: null, 3: null, 4: null }; // mat -> server-owned timer
     this._alarmPending = false; // track alarm so we don't double-schedule
@@ -123,24 +124,32 @@ export default class BjjTimerServer {
         if (this.ctrlSlots[i] && !liveIds.has(this.ctrlSlots[i])) this._freeCtrlSlot(i);
       }
 
-      // Take over the mat if another connection holds it. A same-device reconnect
-      // (matching clientId — e.g. the phone woke from sleep) is silent; a genuinely
-      // different device gets a 'replaced' notice so it stops and doesn't fight back.
+      // Is this the same device reclaiming the mat it last held (e.g. a phone
+      // that slept and reconnected, even after its old socket fully closed)?
+      const reclaim = !!(clientId && this.matClientId[mat] === clientId);
+
+      // Take over the mat if another connection holds it. A reclaim is silent; a
+      // genuinely different device gets a 'replaced' notice so it stops and
+      // doesn't fight back.
       const prevId = this.ctrlSlots[mat];
       if (prevId && prevId !== connection.id) {
-        const prevCtrl = this.controllers[prevId];
-        const sameDevice = prevCtrl && clientId && prevCtrl.clientId === clientId;
         const old = [...this.room.getConnections('controller')].find(c => c.id === prevId);
         if (old) {
-          if (!sameDevice) { try { old.send(JSON.stringify({ type: 'replaced' })); } catch {} }
+          if (!reclaim) { try { old.send(JSON.stringify({ type: 'replaced' })); } catch {} }
           try { old.close(); } catch {}
         }
         this._freeCtrlSlot(mat);
       }
 
-      // Preserve a running/paused timer so taking (or reclaiming) a mat picks up
-      // exactly where it left off; only create a fresh state if the mat has none.
-      if (!this.timerStates[mat]) this.timerStates[mat] = this._newTimerState();
+      // Timer state: a coach reclaiming their own mat keeps it exactly where it
+      // was (sleep/resume, paused or running); a live round survives a takeover so
+      // it isn't cut off mid-class; but a fresh coach on an idle mat starts clean
+      // rather than inheriting a stale leftover time from an earlier class.
+      const existing = this.timerStates[mat];
+      if (!existing || (!reclaim && !existing.running)) {
+        this.timerStates[mat] = this._newTimerState();
+      }
+      this.matClientId[mat] = clientId;
 
       const ctrlColor = color || CTRL_COLORS[mat];
       this.controllers[connection.id] = { slot: mat, color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };

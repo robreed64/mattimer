@@ -947,6 +947,7 @@ let myCtrlSlot  = null;   // which mat (1-4) this device is controlling
 let myCtrlColor = null;
 let myCtrlName  = '';
 let _wasReplaced = false;  // set when another device took over our mat
+let _freshLogin = false;   // true between a deliberate startController and its config reply
 
 const CTRL_COLOR_HEX = {
   blue: '#3B82F6', green: '#10B981', amber: '#F59E0B', pink: '#EC4899',
@@ -1378,6 +1379,7 @@ function _controllerSocketParams() {
 function startController() {
   mode = 'controller';
   _wasReplaced = false;
+  _freshLogin = true; // a deliberate login (vs. a sleep/resume reconnect)
   myCtrlSlot = _selectedMat || 1;
   openSocket('controller', _controllerSocketParams());
   document.getElementById('landing').style.display    = 'none';
@@ -1461,18 +1463,22 @@ function _onMessage(event) {
       applyBranding();
       applyControllerColor();
       _updateMatLabel();
-      // Sync timer: if server already has a timer state (running or paused), apply it
-      // silently so a reconnect (e.g. phone waking from sleep) picks up the live
-      // position. Only push local settings when the mat has no timer state yet.
-      if (msg.timerState) {
-        applyControllerStateSnapshot(msg.timerState, { silent: true });
-      } else {
+      const serverRunning = !!(msg.timerState && msg.timerState.running);
+      if (_freshLogin && !serverRunning) {
+        // Deliberate login on an idle mat: keep this coach's profile presets
+        // (already in local state from loginWithProfile) and push them so the
+        // mat and its TV reflect this class's timing.
         emit('timer:config', {
           roundDuration: state.roundDuration, restDuration: state.restDuration,
           totalRounds: state.totalRounds, warningEnabled: state.warningEnabled,
           warningThreshold: state.warningThreshold, showRound: state.showRound,
         });
+      } else if (msg.timerState) {
+        // Reconnect (sleep/resume) or taking over a live round: adopt the
+        // server's authoritative timer so we pick up exactly where it is.
+        applyControllerStateSnapshot(msg.timerState, { silent: true });
       }
+      _freshLogin = false;
       break;
     }
 
