@@ -2118,7 +2118,19 @@ async function saveBranding() {
   branding.tagline   = document.getElementById('bTagline').value.trim() || 'Competition · Training · Sparring';
   branding.idleClock = document.getElementById('bIdleClock').checked;
   if (logoInput._pendingDataUrl) branding.logoDataUrl = logoInput._pendingDataUrl;
-  if (roomId) await partyFetch('/api/branding', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...branding }) });
+  if (roomId) {
+    let res;
+    try {
+      res = await partyFetch('/api/branding', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...branding }) });
+    } catch (e) {
+      toast('Could not save settings — network error'); return;
+    }
+    if (!res.ok) {
+      let detail = res.status;
+      try { detail = (await res.json()).error || res.status; } catch {}
+      toast('Could not save settings: ' + detail); return;
+    }
+  }
   applyBranding();
   document.getElementById('brandingModal').style.display='none';
   toast('✓ Settings saved');
