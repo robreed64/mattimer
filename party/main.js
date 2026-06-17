@@ -95,6 +95,7 @@ export default class BjjTimerServer {
     if (!this.config) await this.onStart();
     const url  = new URL(ctx.request.url);
     const role = url.searchParams.get('role') || 'display';
+    console.log(`[timer-debug] onConnect role=${role} connId=${connection.id} mat=${url.searchParams.get('mat')} hasToken=${!!url.searchParams.get('token')}`);
 
     if (role === 'controller') {
       // Controllers drive a mat's timer, so they must be authed; TVs/displays
@@ -124,6 +125,7 @@ export default class BjjTimerServer {
         connection.close();
         return;
       }
+      console.log(`[timer-debug] controller auth+mat OK mat=${mat} authOk=${!!auth}`);
 
       // Sweep dead controller bindings left by crashes/hibernation.
       const liveIds = new Set([...this.room.getConnections('controller')].map(c => c.id));
@@ -163,6 +165,7 @@ export default class BjjTimerServer {
       this.ctrlSlots[mat] = connection.id;
       this.ctrlNames[mat] = name;
       connection.setState({ role: 'controller', slot: mat });
+      console.log(`[timer-debug] controller BOUND mat=${mat} connId=${connection.id} clientId=${clientId} reclaim=${reclaim} prevId=${prevId || 'none'}`);
 
       connection.send(JSON.stringify({
         type:       'config',
@@ -214,6 +217,7 @@ export default class BjjTimerServer {
   onClose(connection) {
     const st = connection.state;
     if (!st) return;
+    console.log(`[timer-debug] onClose role=${st.role} connId=${connection.id} mat=${st.slot || st.tvSlot || '-'}`);
 
     if (st.role === 'controller') {
       const ctrl = this.controllers[connection.id];
@@ -241,6 +245,7 @@ export default class BjjTimerServer {
     let msg;
     try { msg = JSON.parse(message); } catch { return; }
     const ctrl = this.controllers[sender.id];
+    console.log(`[timer-debug] onMessage type=${msg.type} from=${sender.id} boundCtrl=${ctrl ? 'mat' + ctrl.slot : 'NONE'}`);
 
     switch (msg.type) {
 
@@ -276,12 +281,14 @@ export default class BjjTimerServer {
       case 'timer:start': {
         if (!ctrl) return;
         const ts = this.timerStates[ctrl.slot] || (this.timerStates[ctrl.slot] = this._newTimerState());
+        console.log(`[timer-debug] timer:start mat=${ctrl.slot} alreadyRunning=${ts.running} timeRemaining=${ts.timeRemaining} alarmPending=${this._alarmPending}`);
         if (ts.running) return;
         ts.running = true; ts.startedAt = Date.now(); ts.timeRemainingAtStart = ts.timeRemaining;
         this._broadcastTimerState(ctrl.slot);
         this._sendSoundToTvs(ctrl.slot, 'start');
         await this.room.storage.put('timerState:' + ctrl.slot, ts);
         await this._scheduleAlarm();
+        console.log(`[timer-debug] timer:start scheduled alarm, alarmPending=${this._alarmPending}`);
         break;
       }
 
@@ -565,6 +572,7 @@ export default class BjjTimerServer {
 
   async alarm() {
     this._alarmPending = false;
+    console.log(`[timer-debug] alarm fired, running=${JSON.stringify([1,2,3,4].map(i => this.timerStates[i]?.running || false))}`);
     const now = Date.now();
     for (let slot = 1; slot <= 4; slot++) {
       // Recover in-memory state after DO hibernation
@@ -685,10 +693,12 @@ export default class BjjTimerServer {
 
   _sendToCtrl(slot, msg) {
     const connId = this.ctrlSlots[slot];
-    if (!connId) return;
+    if (!connId) { console.log(`[timer-debug] _sendToCtrl mat=${slot} NO connId bound`); return; }
+    const liveIds = [...this.room.getConnections('controller')].map(c => c.id);
     for (const conn of this.room.getConnections('controller')) {
-      if (conn.id === connId) { conn.send(msg); return; }
+      if (conn.id === connId) { conn.send(msg); console.log(`[timer-debug] _sendToCtrl mat=${slot} sent to ${connId}`); return; }
     }
+    console.log(`[timer-debug] _sendToCtrl mat=${slot} connId=${connId} NOT in live controllers=[${liveIds.join(',')}]`);
   }
 
   // A mat's TV(s) are pinned by code, so broadcasting to a mat is just
