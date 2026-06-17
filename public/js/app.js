@@ -1123,16 +1123,19 @@ function promptControllerPassword() {
   openMatPicker();
 }
 
-// ─── MAT PICKER ───────────────────────────────────────────────────
-let _selectedMat = null;
+// ─── MAT PICKER (multi-select: run several mats as one timer) ─────
+let _selectedMats = [];   // mats chosen for this session, lowest = primary
+let _matStatus = {};      // last-known occupancy from the server
 
 function openMatPicker() {
   const modal = document.getElementById('matPickerModal');
   if (!modal) return;
-  renderMatGrid({});
+  _selectedMats = [];
+  _matStatus = {};
+  renderMatGrid();
   modal.style.display = 'flex';
   // Pull live occupancy so coaches see which mats are open vs. in use.
-  partyFetch('/api/mats').then(r => r.json()).then(d => renderMatGrid(d.mats || {})).catch(() => {});
+  partyFetch('/api/mats').then(r => r.json()).then(d => { _matStatus = d.mats || {}; renderMatGrid(); }).catch(() => {});
 }
 
 function closeMatPicker(e) {
@@ -1140,23 +1143,39 @@ function closeMatPicker(e) {
   document.getElementById('matPickerModal').style.display = 'none';
 }
 
-function renderMatGrid(mats) {
+function renderMatGrid() {
   const grid = document.getElementById('matGrid');
   if (!grid) return;
   grid.innerHTML = [1,2,3,4].map(n => {
-    const m = mats[n] || {};
+    const m = _matStatus[n] || {};
     const inUse = m.occupied;
-    const sub = inUse ? `In use — ${escHtml(m.name || 'Coach')}` : 'Open';
+    const picked = _selectedMats.includes(n);
+    const sub = inUse ? `In use — ${escHtml(m.name || 'Coach')}` : (picked ? 'Selected' : 'Tap to select');
     const accent = m.color || getSlotColor(n);
-    return `<button class="mat-card${inUse ? ' mat-in-use' : ''}" onclick="selectMat(${n})" style="border-left-color:${accent}">
+    const cls = 'mat-card' + (inUse ? ' mat-in-use' : '') + (picked ? ' mat-picked' : '');
+    return `<button class="${cls}" onclick="toggleMat(${n})" ${inUse ? 'disabled' : ''} style="border-left-color:${accent}">
       <span class="mat-card-num">Mat ${n}</span>
       <span class="mat-card-status">${sub}</span>
     </button>`;
   }).join('');
+  const btn = document.getElementById('matConfirmBtn');
+  if (btn) {
+    const k = _selectedMats.length;
+    btn.disabled = k === 0;
+    btn.textContent = k <= 1 ? 'Run this mat' : `Run ${k} mats together`;
+  }
 }
 
-function selectMat(n) {
-  _selectedMat = n;
+function toggleMat(n) {
+  if (_matStatus[n]?.occupied) return; // can't grab an in-use mat
+  const i = _selectedMats.indexOf(n);
+  if (i === -1) _selectedMats.push(n); else _selectedMats.splice(i, 1);
+  _selectedMats.sort((a, b) => a - b);
+  renderMatGrid();
+}
+
+function confirmMats() {
+  if (_selectedMats.length === 0) return;
   document.getElementById('matPickerModal').style.display = 'none';
   // Platform admins skip coach profiles and go straight in.
   if (_currentUser?.app_metadata?.role === 'admin') {
@@ -1366,9 +1385,12 @@ function _getCtrlDeviceId() {
   return id;
 }
 
+let myCtrlMats = [];
+
 function _controllerSocketParams() {
+  const mats = (myCtrlMats.length ? myCtrlMats : _selectedMats);
   return {
-    mat:       _selectedMat || 1,
+    mats:      (mats.length ? mats : [1]).join(','),
     name:      encodeURIComponent(myCtrlName || 'Unnamed Class'),
     color:     _pendingProfile?.color || '',
     profileId: _pendingProfile?.id    || '',
@@ -1380,7 +1402,8 @@ function startController() {
   mode = 'controller';
   _wasReplaced = false;
   _freshLogin = true; // a deliberate login (vs. a sleep/resume reconnect)
-  myCtrlSlot = _selectedMat || 1;
+  myCtrlMats = _selectedMats.slice();
+  myCtrlSlot = myCtrlMats[0] || 1;
   openSocket('controller', _controllerSocketParams());
   document.getElementById('landing').style.display    = 'none';
   document.getElementById('controller').style.display = 'block';
@@ -1388,11 +1411,12 @@ function startController() {
   updateUI();
 }
 
-// Simple "Mat N — coach" label in the controller status bar (replaces the
-// old TV claim/release monitor bar).
+// "Mat N" (or "Mats 1, 3") label in the controller status bar.
 function _updateMatLabel() {
   const el = document.getElementById('matLabel');
-  if (el) el.textContent = `Mat ${_selectedMat || myCtrlSlot || ''}`.trim();
+  if (!el) return;
+  const mats = myCtrlMats.length ? myCtrlMats : (myCtrlSlot ? [myCtrlSlot] : []);
+  el.textContent = mats.length > 1 ? `Mats ${mats.join(', ')}` : `Mat ${mats[0] || ''}`.trim();
 }
 
 // ─── LANDING: tap TV card to connect this device as that display ──
@@ -1459,6 +1483,7 @@ function _onMessage(event) {
       tvCodes  = msg.tvCodes;
       branding = { ...branding, ...msg.branding };
       if (msg.ctrlSlot)  myCtrlSlot = msg.ctrlSlot;
+      if (Array.isArray(msg.mats) && msg.mats.length) myCtrlMats = msg.mats.slice();
       if (msg.ctrlColor) myCtrlColor = msg.ctrlColor;
       applyBranding();
       applyControllerColor();
@@ -1485,7 +1510,8 @@ function _onMessage(event) {
     // Live per-mat occupancy — only meaningful while the mat picker is open.
     case 'mat:status': {
       if (document.getElementById('matPickerModal')?.style.display === 'flex') {
-        renderMatGrid(msg.mats || {});
+        _matStatus = msg.mats || {};
+        renderMatGrid();
       }
       break;
     }
@@ -1643,7 +1669,7 @@ document.addEventListener('visibilitychange', () => {
 function exitToProfilePicker() {
   if (socket) { try { socket.close(); } catch(e) {} }
   mode = null;
-  myCtrlName = null; _pendingProfile = null; _selectedMat = null;
+  myCtrlName = null; _pendingProfile = null; myCtrlMats = [];
   document.getElementById('controller').style.display = 'none';
   document.getElementById('landing').style.display = 'flex';
   openMatPicker();

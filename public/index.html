@@ -244,11 +244,13 @@
 <div id="matPickerModal" class="modal-backdrop" style="display:none" onclick="closeMatPicker(event)">
   <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
     <div class="modal-header">
-      <span class="modal-title">🥋 Which Mat?</span>
+      <span class="modal-title">🥋 Which Mat(s)?</span>
       <button class="modal-close" onclick="closeMatPicker()">✕</button>
     </div>
     <div class="modal-body" style="gap:.75rem">
+      <div style="font-family:var(--font-ui);font-size:.78rem;color:var(--mat-muted)">Tap one or more open mats to run them together on one timer.</div>
       <div class="mat-grid" id="matGrid"><!-- populated by JS --></div>
+      <button class="btn btn-gold" id="matConfirmBtn" style="width:100%;font-size:1rem;padding:.8rem" disabled onclick="confirmMats()">Run this mat</button>
     </div>
   </div>
 </div>

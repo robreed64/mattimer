@@ -116,9 +116,13 @@ export default class BjjTimerServer {
       const clientId  = url.searchParams.get('clientId')  || null;
       const authSub   = auth?.sub || null;
 
-      // The coach explicitly chose which mat (1-4) to run.
-      const mat = parseInt(url.searchParams.get('mat'), 10);
-      if (!(mat >= 1 && mat <= 4)) {
+      // The coach chose one or more mats (1-4) to run together as one timer.
+      // Accept `mats` (comma list) with a fallback to legacy single `mat`.
+      const requested = [...new Set(
+        (url.searchParams.get('mats') || url.searchParams.get('mat') || '')
+          .split(',').map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= 4)
+      )].sort((a, b) => a - b);
+      if (requested.length === 0) {
         connection.send(JSON.stringify({ type: 'error', msg: 'No mat selected' }));
         connection.close();
         return;
@@ -130,51 +134,72 @@ export default class BjjTimerServer {
         if (this.ctrlSlots[i] && !liveIds.has(this.ctrlSlots[i])) this._freeCtrlSlot(i);
       }
 
-      // Is this the same device reclaiming the mat it last held (e.g. a phone
-      // that slept and reconnected, even after its old socket fully closed)?
-      const reclaim = !!(clientId && this.matClientId[mat] === clientId);
-
-      // Take over the mat if another connection holds it. A reclaim is silent; a
-      // genuinely different device gets a 'replaced' notice so it stops and
-      // doesn't fight back.
-      const prevId = this.ctrlSlots[mat];
-      if (prevId && prevId !== connection.id) {
-        const old = [...this.room.getConnections('controller')].find(c => c.id === prevId);
-        if (old) {
-          if (!reclaim) { try { old.send(JSON.stringify({ type: 'replaced' })); } catch {} }
-          try { old.close(); } catch {}
+      // Keep only mats that are free or already ours (same device reclaiming,
+      // e.g. a phone that slept). Mats run by a different coach can't be grabbed.
+      const bound = [];
+      const reclaimOldIds = new Set();
+      for (const m of requested) {
+        const holder = this.ctrlSlots[m];
+        if (!holder) { bound.push(m); continue; }
+        const holderCtrl = this.controllers[holder];
+        if (holderCtrl && clientId && holderCtrl.clientId === clientId) {
+          bound.push(m);
+          if (holder !== connection.id) reclaimOldIds.add(holder);
         }
-        this._freeCtrlSlot(mat);
+        // otherwise in use by someone else — silently skip it
+      }
+      if (bound.length === 0) {
+        connection.send(JSON.stringify({ type: 'error', msg: 'Those mats are already in use' }));
+        connection.close();
+        return;
       }
 
-      // Timer state: ONLY a coach reclaiming their own mat (same device, e.g.
-      // waking from sleep) keeps the existing timer. Any other coach starts the
-      // mat clean — we never inherit a previous class's timer or a leftover
-      // "running" zombie (which would otherwise show a stale time, make Start a
-      // no-op, and make Pause jump).
-      if (!this.timerStates[mat] || !reclaim) {
-        this.timerStates[mat] = this._newTimerState();
+      // Close our own prior connection(s) being reclaimed and free their mats.
+      for (const oldId of reclaimOldIds) {
+        const old = [...this.room.getConnections('controller')].find(c => c.id === oldId);
+        if (old) { try { old.close(); } catch {} }
+        for (let i = 1; i <= 4; i++) if (this.ctrlSlots[i] === oldId) this._freeCtrlSlot(i);
       }
-      this.matClientId[mat] = clientId;
 
-      const ctrlColor = color || CTRL_COLORS[mat];
-      this.controllers[connection.id] = { slot: mat, color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };
-      this.ctrlSlots[mat] = connection.id;
-      this.ctrlNames[mat] = name;
-      connection.setState({ role: 'controller', slot: mat });
+      const primary = bound[0]; // lowest mat holds the single shared timer
+      const reclaim = !!(clientId && this.matClientId[primary] === clientId);
+
+      // One timer on the primary mat; the rest of the group mirrors it. A coach
+      // reclaiming their own session keeps the live timer; anyone else starts clean.
+      if (!this.timerStates[primary] || !reclaim) {
+        this.timerStates[primary] = this._newTimerState();
+      }
+      this.timerStates[primary].mats = bound.slice();
+      // Mirror mats carry no independent timer.
+      for (const m of bound) {
+        if (m === primary) continue;
+        this.timerStates[m] = null;
+        this.room.storage.delete('timerState:' + m).catch(() => {});
+      }
+
+      const ctrlColor = color || CTRL_COLORS[primary];
+      this.controllers[connection.id] = { slot: primary, mats: bound.slice(), color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };
+      for (const m of bound) {
+        this.ctrlSlots[m] = connection.id;
+        this.ctrlNames[m] = name;
+        this.matClientId[m] = clientId;
+      }
+      connection.setState({ role: 'controller', slot: primary, mats: bound.slice() });
 
       connection.send(JSON.stringify({
         type:       'config',
         tvCodes:    this.config.tvCodes,
         profiles:   this._safeProfiles(),
         branding:   this.config.branding,
-        ctrlSlot:   mat, ctrlColor, ctrlName: name,
-        timerState: this._computeCurrentState(mat),
+        ctrlSlot:   primary, mats: bound.slice(), ctrlColor, ctrlName: name,
+        timerState: this._computeCurrentState(primary),
       }));
-      // Push the controlling coach's color/name and live timer to this mat's TV(s).
-      this._sendToTv(mat, JSON.stringify({ type: 'ctrl:color', color: ctrlColor, name }));
-      const cur = this._computeCurrentState(mat);
-      if (cur) this._sendToTv(mat, JSON.stringify({ type: 'state', ...cur }));
+      // Push the coach's color/name + live timer to every TV in the group.
+      const cur = this._computeCurrentState(primary);
+      for (const m of bound) {
+        this._sendToTv(m, JSON.stringify({ type: 'ctrl:color', color: ctrlColor, name }));
+        if (cur) this._sendToTv(m, JSON.stringify({ type: 'state', ...cur }));
+      }
       this._broadcastMatStatus();
 
     } else if (role === 'tv') {
@@ -219,9 +244,12 @@ export default class BjjTimerServer {
       if (ctrl) {
         const { slot } = ctrl;
         const duration = Math.round((Date.now() - (ctrl.connectedAt || Date.now())) / 1000);
-        // Only free the mat if this connection still holds it — a takeover may
-        // have already rebound the slot to a newer connection.
-        if (this.ctrlSlots[slot] === connection.id) this._freeCtrlSlot(slot);
+        // Free every mat in this controller's group that it still holds (a
+        // takeover may have already rebound some). The primary's timerState is
+        // intentionally preserved so a sleep/resume reconnect picks it back up.
+        for (const m of (ctrl.mats || [slot])) {
+          if (this.ctrlSlots[m] === connection.id) this._freeCtrlSlot(m);
+        }
         // Platform-admin visits aren't real classes — keep them out of Recent activity
         if (duration > 30 && ctrl.userRole !== 'admin') {
           (async () => {
@@ -245,10 +273,11 @@ export default class BjjTimerServer {
 
       case 'ctrl:rename': {
         if (!ctrl) return;
-        this.ctrlNames[ctrl.slot] = msg.name || 'Unnamed Class';
-        this.controllers[sender.id].name = this.ctrlNames[ctrl.slot];
-        // Update this mat's TV(s) with the new class name.
-        this._sendToTv(ctrl.slot, JSON.stringify({ type: 'ctrl:color', color: ctrl.color, name: this.ctrlNames[ctrl.slot] }));
+        const nm = msg.name || 'Unnamed Class';
+        for (const m of (ctrl.mats || [ctrl.slot])) this.ctrlNames[m] = nm;
+        this.controllers[sender.id].name = nm;
+        // Update every TV in the group with the new class name.
+        this._sendToTvs(ctrl.slot, JSON.stringify({ type: 'ctrl:color', color: ctrl.color, name: nm }));
         this._broadcastMatStatus();
         break;
       }
@@ -623,14 +652,25 @@ export default class BjjTimerServer {
     return s;
   }
 
-  // What a TV should display for a mat: the live timer when a coach is on the
-  // mat or a round is genuinely still counting; otherwise a clean idle round so
-  // an unattended TV shows a ready screen instead of a stale/flashing leftover.
+  // The mat that holds the shared timer for `mat` — itself if it's a primary,
+  // otherwise the primary of the group it mirrors.
+  _primaryForMat(mat) {
+    if (this.timerStates[mat]?.mats) return mat;
+    for (let p = 1; p <= 4; p++) {
+      if (this.timerStates[p]?.mats?.includes(mat)) return p;
+    }
+    return mat;
+  }
+
+  // What a TV should display for a mat: the live (group) timer when a coach is on
+  // the mat or a round is genuinely still counting; otherwise a clean idle round
+  // so an unattended TV shows a ready screen instead of a stale/flashing leftover.
   _tvStateForMat(mat) {
-    const ts = this.timerStates[mat];
+    const primary = this._primaryForMat(mat);
+    const ts = this.timerStates[primary];
     const live = this.ctrlSlots[mat]
-      || (ts && ts.running && this._computeCurrentState(mat).timeRemaining > 0);
-    if (live) return this._computeCurrentState(mat);
+      || (ts && ts.running && this._computeCurrentState(primary).timeRemaining > 0);
+    if (live && ts) return this._computeCurrentState(primary);
     const base = ts || this._newTimerState();
     return {
       running: false, phase: 'fight', currentRound: 1,
@@ -693,10 +733,12 @@ export default class BjjTimerServer {
     }
   }
 
-  // A mat's TV(s) are pinned by code, so broadcasting to a mat is just
-  // targeting the TV(s) on that mat.
-  _sendToTvs(mat, msg) {
-    this._sendToTv(mat, msg);
+  // Broadcast to every TV in a primary mat's group (so all mats grouped under
+  // one timer show the same thing). Falls back to just the mat for a group of 1.
+  _sendToTvs(primary, msg) {
+    const ts = this.timerStates[primary];
+    const mats = (ts && ts.mats) ? ts.mats : [primary];
+    for (const m of mats) this._sendToTv(m, msg);
   }
 
   _sendSoundToTvs(slot, soundType) {

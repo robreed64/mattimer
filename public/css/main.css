@@ -307,7 +307,9 @@
   .mat-card:hover { border-color: var(--mat-gold); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.4); }
   .mat-card-num { font-family: var(--font-display); font-size: 1.6rem; letter-spacing: .08em; color: var(--mat-text); line-height: 1; }
   .mat-card-status { font-family: var(--font-ui); font-size: .72rem; letter-spacing: .1em; color: var(--mat-muted); text-transform: uppercase; }
-  .mat-card.mat-in-use { opacity: .7; }
+  .mat-card.mat-picked { border-color: var(--mat-gold); background: rgba(212,160,23,.12); box-shadow: 0 0 0 1px var(--mat-gold) inset; }
+  .mat-card.mat-in-use { opacity: .5; cursor: not-allowed; }
+  .mat-card.mat-in-use:hover { transform: none; box-shadow: none; border-color: var(--mat-border); }
   .mat-card.mat-in-use .mat-card-status { color: var(--warning-color); }
 
   .landing-tv-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; width: 100%; max-width: 680px; margin-bottom: 2rem; }
