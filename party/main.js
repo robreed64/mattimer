@@ -408,6 +408,7 @@ export default class BjjTimerServer {
     // Destructive routes are owner/admin only (once a token is present to say so)
     const destructive =
       (req.method === 'DELETE' && /^\/api\/profiles\/[^/]+$/.test(apiPath)) ||
+      (req.method === 'PUT'    && /^\/api\/profiles\/[^/]+$/.test(apiPath)) ||
       (req.method === 'POST' && apiPath === '/api/branding') ||
       (req.method === 'POST' && /^\/api\/tvCodes\/\d+\/regenerate$/.test(apiPath));
     if (destructive && auth && auth.role === 'coach') {

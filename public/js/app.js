@@ -1214,11 +1214,12 @@ function renderProfileGrid() {
     grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;font-family:var(--font-ui);font-size:.85rem;color:var(--mat-muted);padding:1rem">No profiles yet — create one below</div>';
     return;
   }
+  const isOwner = _gymRole === 'owner';
   grid.innerHTML = profiles.map(p => `
     <div class="profile-card" onclick="selectProfile('${p.id}')" style="border-color:${p.color}44">
       <div class="profile-color-bar" style="background:${p.color}"></div>
-      <button class="profile-edit" onclick="event.stopPropagation();openEditProfile('${p.id}')" title="Edit name / change PIN">✎</button>
-      <button class="profile-delete" onclick="event.stopPropagation();deleteProfile('${p.id}')" title="Delete">✕</button>
+      ${isOwner ? `<button class="profile-edit" onclick="event.stopPropagation();openEditProfile('${p.id}')" title="Edit name / change PIN">✎</button>
+      <button class="profile-delete" onclick="event.stopPropagation();deleteProfile('${p.id}')" title="Delete">✕</button>` : ''}
       <div class="profile-name">${escHtml(p.name)}</div>
       <div class="profile-meta">${p.hasPin ? '🔒 PIN protected' : 'No PIN'}</div>
     </div>
