@@ -23,22 +23,113 @@ let _roomTokenExp = 0;
 
 function _isDemoRoom() { return roomId?.toLowerCase() === 'demo'; }
 
+// ─── DEVICE PAIRING ───────────────────────────────────────────────
+// A phone that redeemed a pairing code (scanned off the gym's display QR)
+// has no Supabase account — it authenticates with a long-lived device
+// token stored here instead. See api/pairing-redeem.js / api/device-token.js.
+const DEVICE_STORAGE_KEY = 'mattimer_device';
+
+function _loadDeviceRecord() {
+  try {
+    const raw = localStorage.getItem(DEVICE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function _saveDeviceRecord(rec) {
+  try { localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(rec)); } catch(e) {}
+}
+
+// Exchanges a stored device token for a fresh room token; clears the
+// stored device on rejection (e.g. it was revoked from the Coaches modal).
+async function _mintDeviceRoomToken(device) {
+  try {
+    const res = await fetch('/api/device-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roomId, deviceToken: device.deviceToken }),
+    });
+    if (!res.ok) { localStorage.removeItem(DEVICE_STORAGE_KEY); return null; }
+    const { roomToken, roomTokenExp } = await res.json();
+    _roomToken = roomToken; _roomTokenExp = roomTokenExp;
+    return _roomToken;
+  } catch(e) { return null; }
+}
+
 async function _mintRoomToken() {
   _roomToken = null; _roomTokenExp = 0;
   if (!roomId || _isDemoRoom()) return null;
+  const { data: { session } } = await _supabase.auth.getSession();
+  if (session) {
+    try {
+      const res = await fetch('/api/room-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+        body: JSON.stringify({ roomId }),
+      });
+      if (res.ok) {
+        const { token, exp } = await res.json();
+        _roomToken = token; _roomTokenExp = exp;
+      }
+    } catch(e) {}
+    return _roomToken;
+  }
+
+  // No Supabase session — fall back to a paired device's long-lived token.
+  const device = _loadDeviceRecord();
+  if (device?.deviceToken && device.roomCode === roomId) {
+    return _mintDeviceRoomToken(device);
+  }
+  return null;
+}
+
+// Redeems a one-time pairing code (`?pair=<code>`) for room access with no
+// Supabase login on the phone, then drops straight into the existing
+// profile-picker/PIN flow. Returns true if it fully handled page load.
+async function _redeemPairingCode(code) {
+  const url = new URL(location.href);
+  url.searchParams.delete('pair');
+  history.replaceState(null, '', url.toString());
+
   try {
-    const { data: { session } } = await _supabase.auth.getSession();
-    if (!session) return null;
-    const res = await fetch('/api/room-token', {
+    const res = await fetch('/api/pairing-redeem', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ roomId }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
     });
-    if (!res.ok) return null;
-    const { token, exp } = await res.json();
-    _roomToken = token; _roomTokenExp = exp;
-  } catch(e) {}
-  return _roomToken;
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById('loginView').style.display = 'flex';
+      const err = document.getElementById('authError');
+      if (err) {
+        err.textContent = data.error || 'That pairing code is invalid or expired. Ask the gym to show a new one.';
+        err.style.display = 'block';
+      }
+      return true;
+    }
+    _saveDeviceRecord({ deviceId: data.deviceId, deviceToken: data.deviceToken, roomCode: data.roomCode });
+    roomId = data.roomCode;
+    _roomToken = data.roomToken; _roomTokenExp = data.roomTokenExp;
+    _gymRole = 'coach';
+    await _finishRoomSetup();
+    openProfilePicker();
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+// Silently resumes a previously-paired phone (no Supabase session, no
+// `?pair=` param, but a stored device token for this room).
+async function _resumeDeviceSession() {
+  const device = _loadDeviceRecord();
+  if (!device?.deviceToken || device.roomCode !== roomId) return false;
+  const token = await _mintDeviceRoomToken(device);
+  if (!token) return false;
+  _gymRole = 'coach';
+  await _finishRoomSetup();
+  openProfilePicker();
+  return true;
 }
 
 async function _freshRoomToken() {
@@ -487,6 +578,11 @@ async function _afterAuth(user) {
     return;
   }
 
+  // Pairing barcode — a phone scanning the gym's display QR lands here
+  // with no Supabase account at all; redeem the one-time code instead.
+  const pairCode = _urlParams.get('pair');
+  if (pairCode && await _redeemPairingCode(pairCode)) return;
+
   const hashParams = new URLSearchParams(location.hash.replace('#', ''));
   const tokenType   = hashParams.get('type');
   const accessToken = hashParams.get('access_token');
@@ -507,6 +603,9 @@ async function _afterAuth(user) {
 
   const { data: { session } } = await _supabase.auth.getSession();
   if (!session) {
+    // A previously-paired phone has no Supabase session but may still
+    // hold a long-lived device token for this room — try that next.
+    if (roomId && await _resumeDeviceSession()) return;
     if (roomId) {
       document.getElementById('loginView').style.display = 'flex';
     } else {
@@ -596,6 +695,10 @@ function selectRoom(code) {
   const url = new URL(location.href);
   url.searchParams.set('room', code);
   history.replaceState(null, '', url.toString());
+  // Discard any token minted for the previous room — _finishRoomSetup()
+  // now reuses an unexpired token via _freshRoomToken() rather than always
+  // re-minting, so a stale cross-room token must be cleared explicitly.
+  _roomToken = null; _roomTokenExp = 0;
   _finishRoomSetup();
 }
 
@@ -606,7 +709,9 @@ async function _finishRoomSetup() {
   const codeEl = document.getElementById('roomCodeDisplay');
   if (codeEl) codeEl.textContent = _gymName || roomId;
 
-  await _mintRoomToken();
+  // _freshRoomToken() reuses an already-minted token (e.g. one a device
+  // just got from pairing-redeem/device-token) instead of re-minting it.
+  await _freshRoomToken();
 
   if (_gymRole === 'owner') {
     const btn = document.getElementById('coachesBtn');
@@ -715,8 +820,7 @@ async function deleteRoom(id) {
 // ─── COACHES PANEL (owner only) ───────────────────────────────────
 async function openCoachesModal() {
   document.getElementById('coachesModal').style.display = 'flex';
-  document.getElementById('newCoachEmail').value = '';
-  await loadCoaches();
+  await Promise.all([loadCoaches(), loadDevices()]);
 }
 
 function closeCoachesModal(e) {
@@ -765,28 +869,47 @@ async function toggleMemberSettings(gymUserId, currentRole) {
   await loadCoaches();
 }
 
-async function addCoach() {
-  const email = document.getElementById('newCoachEmail').value.trim();
-  if (!email) { toast('Email is required'); return; }
-
-  const { data: { session } } = await _supabase.auth.getSession();
-  const res = await fetch('/api/create-user', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-    body: JSON.stringify({ email, gymId: _gymId }),
-  });
-  const data = await res.json();
-  if (!data.ok) { toast('Error: ' + (data.error || 'Unknown error')); return; }
-  toast('Invite created');
-  document.getElementById('newCoachEmail').value = '';
-  document.getElementById('coachInviteLink').value = data.inviteLink;
-  document.getElementById('coachInviteBox').style.display = 'block';
-  await loadCoaches();
+function _fmtDeviceDate(iso) {
+  if (!iso) return 'never';
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function copyCoachInvite() {
-  const val = document.getElementById('coachInviteLink').value;
-  navigator.clipboard.writeText(val).then(() => toast('Link copied!')).catch(() => {});
+async function loadDevices() {
+  const list = document.getElementById('deviceList');
+  if (!list) return;
+  list.innerHTML = '<div style="color:var(--mat-muted);font-size:.85rem;padding:.25rem 0">Loading…</div>';
+
+  const { data: { session } } = await _supabase.auth.getSession();
+  const res = await fetch('/api/device-list', { headers: { 'Authorization': 'Bearer ' + session.access_token } });
+  const data = await res.json();
+  const devices = (data.devices || []).filter(d => !d.revoked_at);
+
+  if (!res.ok || !devices.length) {
+    list.innerHTML = '<div style="color:var(--mat-muted);font-family:var(--font-ui);font-size:.85rem;padding:.25rem 0">No paired devices yet — show the QR on the display screen.</div>';
+    return;
+  }
+
+  list.innerHTML = devices.map(d => `
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;padding:.5rem .75rem;gap:.5rem">
+      <span style="font-family:var(--font-ui);font-size:.9rem;flex:1;min-width:0">${escHtml(d.label || 'Coach phone')} <span style="color:var(--mat-muted);font-size:.8rem">— last used ${_fmtDeviceDate(d.last_seen_at)}</span></span>
+      <button onclick="revokeDevice('${d.id}')" style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-size:.8rem;padding:.2rem .4rem" title="Revoke">✕</button>
+    </div>
+  `).join('');
+}
+
+async function revokeDevice(deviceId) {
+  if (_gymRole !== 'owner') return;
+  if (!confirm('Revoke this device? It will lose access the next time it refreshes.')) return;
+  const { data: { session } } = await _supabase.auth.getSession();
+  const res = await fetch('/api/device-revoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+    body: JSON.stringify({ deviceId }),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast('Error: ' + (data.error || 'Unknown error')); return; }
+  toast('Device revoked');
+  await loadDevices();
 }
 
 async function removeCoach(gymUserId) {
@@ -1921,17 +2044,47 @@ document.addEventListener('keydown', (e) => {
 
 // ─── QR CODE (display screen bottom-right) ───────────────────────
 let _qrGenerated = false;
+let _pairingQrTimer = null;
+const PAIRING_QR_REFRESH_MS = 8 * 60 * 1000; // before pairing-create's 10-min code TTL
 
 function generateDisplayQr() {
-  if (_qrGenerated) return;
   const container = document.getElementById('displayQrCode');
   const label     = document.getElementById('displayQrLabel');
   if (!container) return;
-  // QR shows the room URL so phones can scan and join the same room
+
+  // Owner session active on this screen: show a rotating pairing QR so a
+  // coach's phone can join with no Supabase account of its own.
+  if (roomId && !_isDemoRoom() && _gymRole === 'owner') {
+    _refreshPairingQr(container, label);
+    if (!_pairingQrTimer) {
+      _pairingQrTimer = setInterval(() => _refreshPairingQr(container, label), PAIRING_QR_REFRESH_MS);
+    }
+    return;
+  }
+
+  if (_qrGenerated) return;
+  // No owner session to mint a pairing code — fall back to a plain room link
   const url = roomId
     ? `${location.origin}${location.pathname}?room=${roomId}`
     : location.origin;
   renderQr(container, label, url, url.replace(/^https?:\/\//, ''), '');
+}
+
+// Mints a fresh one-time pairing code and renders it as "scan to add a
+// coach phone" — see api/pairing-create.js.
+async function _refreshPairingQr(container, label) {
+  try {
+    const { data: { session } } = await _supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch('/api/pairing-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ roomId }),
+    });
+    if (!res.ok) return;
+    const { url } = await res.json();
+    renderQr(container, label, url, 'Scan to add a coach phone', '');
+  } catch(e) {}
 }
 
 function renderQr(container, label, url, ipDisplay, localName) {

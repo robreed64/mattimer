@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { checkSignupRate, PER_IP_MAX, GLOBAL_MAX } = require('../api/_lib/rate-limit');
+const { checkSignupRate, PER_IP_MAX, GLOBAL_MAX, checkPairingRate, PAIRING_PER_IP_MAX } = require('../api/_lib/rate-limit');
 
 // Fake of the supabase fluent API as used by checkSignupRate: the .gte()
 // call is the awaitable terminal for both count queries; .eq() marks the
@@ -52,4 +52,18 @@ test('fails open when the store errors', async () => {
   const admin = fakeAdmin({ error: { message: 'connection refused' } });
   const { allowed } = await checkSignupRate(admin, '1.2.3.4');
   assert.equal(allowed, true);
+});
+
+test('checkPairingRate denies at its own (tighter) per-IP limit', async () => {
+  const admin = fakeAdmin({ ipCount: PAIRING_PER_IP_MAX });
+  const { allowed } = await checkPairingRate(admin, '1.2.3.4');
+  assert.equal(allowed, false);
+  assert.equal(admin.inserts.length, 0);
+});
+
+test('checkPairingRate allows and records under its limits', async () => {
+  const admin = fakeAdmin({ ipCount: 0, allCount: 0 });
+  const { allowed } = await checkPairingRate(admin, '1.2.3.4');
+  assert.equal(allowed, true);
+  assert.deepEqual(admin.inserts, [{ ip: '1.2.3.4' }]);
 });

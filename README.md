@@ -75,6 +75,58 @@ Browser-safe config lives in `public/supabase-config.js` (publishable key) and `
   alter table signup_attempts enable row level security; -- no policies: service role only
   ```
 
+- `pairing_attempts` — IP + timestamp rows backing the pairing-redeem rate
+  limit (10/10min per IP, 200/10min global; rows pruned after 24h). Same
+  shape as `signup_attempts`:
+
+  ```sql
+  create table pairing_attempts (
+    id bigint generated always as identity primary key,
+    ip text not null,
+    created_at timestamptz not null default now()
+  );
+  create index pairing_attempts_ip_time on pairing_attempts (ip, created_at);
+  alter table pairing_attempts enable row level security; -- no policies: service role only
+  ```
+
+- `pairing_codes` — one-time codes an owner's authenticated browser
+  generates so a coach's phone can join a room without its own Supabase
+  account (`api/pairing-create.js` inserts, `api/pairing-redeem.js`
+  consumes). Short-lived (10 min) and single-use:
+
+  ```sql
+  create table pairing_codes (
+    id bigint generated always as identity primary key,
+    gym_id uuid not null references gyms(id),
+    room_code text not null,
+    code text not null unique,
+    created_at timestamptz not null default now(),
+    expires_at timestamptz not null,
+    used_at timestamptz
+  );
+  create index pairing_codes_code on pairing_codes (code);
+  alter table pairing_codes enable row level security; -- no policies: service role only
+  ```
+
+- `gym_devices` — a phone that redeemed a pairing code. Holds no secrets;
+  the device-auth token it's issued is a self-verifying HMAC (same scheme
+  as room tokens, see `lib/room-token.js`). This table exists purely so an
+  owner can see/revoke paired devices from the Coaches modal:
+
+  ```sql
+  create table gym_devices (
+    id uuid primary key default gen_random_uuid(),
+    gym_id uuid not null references gyms(id),
+    room_code text not null,
+    label text,
+    created_at timestamptz not null default now(),
+    last_seen_at timestamptz,
+    revoked_at timestamptz
+  );
+  create index gym_devices_gym on gym_devices (gym_id);
+  alter table gym_devices enable row level security; -- no policies: service role only
+  ```
+
 Platform admins carry `app_metadata.role = 'admin'` and use `/admin.html`.
 
 ## Legacy LAN/Electron version

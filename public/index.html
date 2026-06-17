@@ -320,25 +320,13 @@
     <div class="modal-body" style="gap:.75rem">
       <div id="coachList" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:.5rem"></div>
       <div style="border-top:1px solid var(--mat-border);padding-top:.75rem">
-        <div style="font-family:var(--font-ui);font-size:.8rem;letter-spacing:.1em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.5rem">Add Instructor</div>
-        <div style="display:flex;flex-direction:column;gap:.5rem">
-          <input type="email" id="newCoachEmail" placeholder="coach@gym.com" autocomplete="off"
-            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.65rem .9rem;outline:none;width:100%;transition:border-color .15s"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
-            onkeydown="if(event.key==='Enter')addCoach()">
-          <div id="coachInviteBox" style="display:none;background:rgba(212,160,23,.08);border:1px solid var(--mat-border);border-radius:4px;padding:.5rem .75rem">
-            <div style="font-family:var(--font-ui);font-size:.7rem;letter-spacing:.12em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.35rem">Invite link — share with coach</div>
-            <div style="display:flex;gap:.5rem;align-items:center">
-              <input id="coachInviteLink" readonly style="background:transparent;border:none;color:var(--mat-gold);font-size:.8rem;flex:1;outline:none;cursor:text">
-              <button onclick="copyCoachInvite()" style="background:none;border:1px solid var(--mat-border);border-radius:3px;color:var(--mat-text);font-family:var(--font-ui);font-size:.7rem;padding:.2rem .5rem;cursor:pointer">Copy</button>
-            </div>
-          </div>
-        </div>
+        <div style="font-family:var(--font-ui);font-size:.8rem;letter-spacing:.1em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.5rem">Paired Devices</div>
+        <div style="font-family:var(--font-ui);font-size:.78rem;color:var(--mat-muted);margin-bottom:.5rem">Coach phones that scanned the QR code on the display screen — no email or password needed. Revoke a device below if a phone is lost or a coach leaves.</div>
+        <div id="deviceList" style="display:flex;flex-direction:column;gap:.5rem"></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeCoachesModal()">Close</button>
-      <button class="btn btn-gold" onclick="addCoach()">Add Instructor</button>
     </div>
   </div>
 </div>
