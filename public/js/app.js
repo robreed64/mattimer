@@ -2006,17 +2006,26 @@ let _displayTab = 'timer';       // which panel the controller last selected
 // setting is on and no coach is running this mat; otherwise the timer/stopwatch.
 function _refreshDisplayMode() {
   if (mode !== 'display') return;
-  const big   = document.getElementById('displayBigClock');
-  const timer = document.getElementById('displayPanelTimer');
-  const sw    = document.getElementById('displayPanelStopwatch');
+  const big    = document.getElementById('displayBigClock');
+  const analog = document.getElementById('displayAnalogClock');
+  const timer  = document.getElementById('displayPanelTimer');
+  const sw     = document.getElementById('displayPanelStopwatch');
   const clockMode = !!branding.idleClock && !_displayCoachActive;
   if (clockMode) {
     if (timer) timer.style.display = 'none';
     if (sw)    sw.style.display = 'none';
-    if (big)   big.style.display = 'flex';
-    _updateBigClock();
+    if (branding.idleClockAnalog) {
+      if (big)    big.style.display = 'none';
+      if (analog) analog.style.display = 'block';
+      _updateAnalogClock();
+    } else {
+      if (analog) analog.style.display = 'none';
+      if (big)    big.style.display = 'flex';
+      _updateBigClock();
+    }
   } else {
-    if (big) big.style.display = 'none';
+    if (big)    big.style.display = 'none';
+    if (analog) analog.style.display = 'none';
     if (_displayTab === 'stopwatch') { if (timer) timer.style.display='none'; if (sw) sw.style.display='flex'; }
     else                             { if (timer) timer.style.display='block'; if (sw) sw.style.display='none'; }
   }
@@ -2032,10 +2041,44 @@ function _updateBigClock() {
   h = h % 12 || 12;
   el.innerHTML = `${h}:${min}<span style="font-size:.4em;opacity:.6;letter-spacing:.05em"> ${ampm}</span>`;
 }
+
+// Build the 12 hour ticks once (major marks at 12/3/6/9).
+function _buildAnalogTicks() {
+  const g = document.getElementById('acTicks');
+  if (!g || g.childElementCount) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  for (let i = 0; i < 12; i++) {
+    const ang = i * 30 * Math.PI / 180;
+    const outer = 96, inner = i % 3 === 0 ? 80 : 86;
+    const ln = document.createElementNS(ns, 'line');
+    ln.setAttribute('x1', (100 + outer * Math.sin(ang)).toFixed(2));
+    ln.setAttribute('y1', (100 - outer * Math.cos(ang)).toFixed(2));
+    ln.setAttribute('x2', (100 + inner * Math.sin(ang)).toFixed(2));
+    ln.setAttribute('y2', (100 - inner * Math.cos(ang)).toFixed(2));
+    ln.setAttribute('class', 'clock-tick' + (i % 3 === 0 ? ' major' : ''));
+    g.appendChild(ln);
+  }
+}
+
+function _updateAnalogClock() {
+  const svg = document.getElementById('displayAnalogClock');
+  if (!svg || svg.style.display === 'none') return;
+  _buildAnalogTicks();
+  const now = new Date();
+  const s = now.getSeconds(), m = now.getMinutes(), h = now.getHours();
+  const rot = (id, deg) => {
+    const el = document.getElementById(id);
+    if (el) el.setAttribute('transform', `rotate(${deg} 100 100)`);
+  };
+  rot('acHour', (h % 12 + m / 60) * 30);
+  rot('acMin',  (m + s / 60) * 6);
+  rot('acSec',  s * 6);
+}
 function openBrandingModal() {
   document.getElementById('bName').value     = branding.appName || '';
   document.getElementById('bTagline').value  = branding.tagline || '';
   document.getElementById('bIdleClock').checked = !!branding.idleClock;
+  document.getElementById('bIdleClockAnalog').checked = !!branding.idleClockAnalog;
   const logo = branding.logoDataUrl || '';
   const img = document.getElementById('logoPreviewImg'), def = document.getElementById('logoPreviewDefault');
   const bImg = document.getElementById('bPreviewImg'), bSvg = document.getElementById('bPreviewDefaultSvg');
@@ -2117,6 +2160,7 @@ async function saveBranding() {
   branding.appName   = document.getElementById('bName').value.trim() || 'BJJ Mat Timer';
   branding.tagline   = document.getElementById('bTagline').value.trim() || 'Competition · Training · Sparring';
   branding.idleClock = document.getElementById('bIdleClock').checked;
+  branding.idleClockAnalog = document.getElementById('bIdleClockAnalog').checked;
   if (logoInput._pendingDataUrl) branding.logoDataUrl = logoInput._pendingDataUrl;
   if (roomId) {
     let res;
@@ -2223,6 +2267,7 @@ function updateDisplayClock() {
   const timeEl = document.getElementById('displayTime2');
   if (timeEl) timeEl.textContent = `${h}:${min} ${ampm}`;
   _updateBigClock();
+  _updateAnalogClock();
 }
 updateDisplayClock();
 setInterval(updateDisplayClock, 1000);
