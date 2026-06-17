@@ -143,6 +143,9 @@
     <div style="font-family:var(--font-display);font-size:1.8rem;letter-spacing:.12em;color:var(--mat-gold);text-align:center;margin-bottom:.25rem">SELECT ROOM</div>
     <div style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.2em;color:var(--mat-muted);text-align:center;margin-bottom:1.5rem;text-transform:uppercase">Your gym has multiple mat rooms</div>
     <div id="gymRoomList" style="display:flex;flex-direction:column;gap:.6rem"></div>
+    <div style="text-align:center;margin-top:1.25rem">
+      <a href="#" onclick="signOut();return false" style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;text-decoration:none">Sign Out</a>
+    </div>
   </div>
 </div>
 
@@ -368,7 +371,7 @@
       <div id="accountBillingBtn"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-red" id="accountSignOutBtn" style="font-size:.8rem;padding:.5rem 1rem" onclick="signOut()">Sign Out</button>
+      <button class="btn btn-red" id="accountSignOutBtn" style="font-size:.8rem;padding:.5rem 1rem" onclick="accountSignOutClick()">Sign Out</button>
       <button class="btn btn-outline" onclick="closeAccountModal()">Close</button>
     </div>
   </div>

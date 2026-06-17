@@ -226,6 +226,14 @@ async function signOut() {
   window.location.href = location.pathname;
 }
 
+// Account modal's primary action differs by who's using the device: a real
+// Supabase owner signs out; a paired coach (no Supabase account) just ends
+// their current profile session — the device stays paired to the gym.
+function accountSignOutClick() {
+  document.getElementById('accountModal').style.display = 'none';
+  if (_currentUser) signOut(); else exitToProfilePicker();
+}
+
 function showLogin() {
   document.getElementById('marketingView').style.display = 'none';
   document.getElementById('signupView').style.display = 'none';
@@ -301,7 +309,7 @@ function openAccountModal() {
 
   const hasUser = !!_currentUser;
   document.getElementById('accountChangePasswordSection').style.display = hasUser ? '' : 'none';
-  document.getElementById('accountSignOutBtn').textContent = hasUser ? 'Sign Out' : 'Leave Gym';
+  document.getElementById('accountSignOutBtn').textContent = hasUser ? 'Sign Out' : 'Switch Profile';
 
   // Billing section — only for gym owners
   const billingSection = document.getElementById('accountBillingSection');
@@ -1619,6 +1627,17 @@ function releaseTv(tvSlot) {
   emit('tv:release', { tvSlot });
   myTvClaims.delete(tvSlot);
   _saveClaimedTvs();
+}
+
+// Ends the current coach's session (releases any claimed TVs, closes the
+// controller socket) and drops back to the profile picker — does not touch
+// the device's pairing in localStorage, so this phone stays connected to
+// the gym for the next profile pick.
+function exitToProfilePicker() {
+  for (const tv of [...myTvClaims]) releaseTv(tv);
+  if (socket) { try { socket.close(); } catch(e) {} }
+  myCtrlName = null; _pendingProfile = null;
+  openProfilePicker();
 }
 
 // ─── CONTROLLER COLOR IDENTITY ────────────────────────────────────

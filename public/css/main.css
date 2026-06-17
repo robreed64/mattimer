@@ -16,6 +16,7 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { overflow-x: hidden; }
   body { background: var(--mat-dark); color: var(--mat-text); font-family: var(--font-body); min-height: 100vh; overflow-x: hidden; }
 
   /* ─── LANDING ──────────────────────────────────────────────── */
@@ -70,7 +71,7 @@
   .btn-massive { font-size: 1.5rem; padding: 1.2rem 3rem; border-radius: 4px; min-width: 160px; }
 
   /* ─── STATUS BAR ───────────────────────────────────────────── */
-  .status-bar { background: var(--mat-panel); border-bottom: 1px solid var(--mat-border); padding: .6rem 1.5rem; display: flex; align-items: center; justify-content: space-between; font-family: var(--font-ui); font-size: .85rem; letter-spacing: .1em; }
+  .status-bar { background: var(--mat-panel); border-bottom: 1px solid var(--mat-border); padding: .6rem 1.5rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; row-gap: .5rem; font-family: var(--font-ui); font-size: .85rem; letter-spacing: .1em; }
   .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; display: inline-block; margin-right: .5rem; transition: background .3s; }
   .status-dot.connected { background: var(--go-color); box-shadow: 0 0 6px var(--go-color); }
   .status-dot.connecting { background: var(--mat-gold); animation: pulse-dot 1s infinite; }
@@ -437,7 +438,7 @@
   .connecting-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; gap: 1rem; font-family: var(--font-ui); letter-spacing: .2em; text-transform: uppercase; }
   .spinner { width: 40px; height: 40px; border: 3px solid var(--mat-border); border-top-color: var(--mat-gold); border-radius: 50%; animation: spin .8s linear infinite; }
   @keyframes spin { to{transform:rotate(360deg)} }
-  #toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--mat-panel); border: 1px solid var(--mat-border); border-radius: 4px; padding: .75rem 1.5rem; font-family: var(--font-ui); font-size: .9rem; letter-spacing: .1em; z-index: 9999; transition: transform .3s; white-space: nowrap; }
+  #toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--mat-panel); border: 1px solid var(--mat-border); border-radius: 4px; padding: .75rem 1.5rem; font-family: var(--font-ui); font-size: .9rem; letter-spacing: .1em; z-index: 9999; transition: transform .3s; max-width: calc(100vw - 2rem); white-space: normal; word-break: break-word; text-align: center; }
   #toast.show { transform: translateX(-50%) translateY(0); }
 
   @media (max-width:768px) {
@@ -446,4 +447,15 @@
   @media (max-width:480px) {
     .mode-cards { grid-template-columns: 1fr; }
     .ctrl-buttons { flex-direction: column; align-items: stretch; }
+  }
+
+  /* ─── STATUS BAR (mobile) — stack groups instead of overflowing ── */
+  @media (max-width: 600px) {
+    .status-bar > div:first-child,
+    .status-bar > div:last-child {
+      flex-basis: 100%;
+      justify-content: center;
+    }
+    .monitor-bar { justify-content: center; }
+    .monitor-panel { min-width: 92px; }
   }
