@@ -2002,6 +2002,12 @@ function applyBranding() {
 let _displayCoachActive = false; // is a coach currently running this mat?
 let _displayTab = 'timer';       // which panel the controller last selected
 
+// True when the idle clock (digital or analog) is on screen: idle-clock setting
+// enabled and no coach is running this mat.
+function _isIdleClockMode() {
+  return mode === 'display' && !!branding.idleClock && !_displayCoachActive;
+}
+
 // Decide what an idle TV shows: a big time-of-day clock when the idle-clock
 // setting is on and no coach is running this mat; otherwise the timer/stopwatch.
 function _refreshDisplayMode() {
@@ -2010,7 +2016,7 @@ function _refreshDisplayMode() {
   const analog = document.getElementById('displayAnalogClock');
   const timer  = document.getElementById('displayPanelTimer');
   const sw     = document.getElementById('displayPanelStopwatch');
-  const clockMode = !!branding.idleClock && !_displayCoachActive;
+  const clockMode = _isIdleClockMode();
   if (clockMode) {
     if (timer) timer.style.display = 'none';
     if (sw)    sw.style.display = 'none';
@@ -2029,6 +2035,8 @@ function _refreshDisplayMode() {
     if (_displayTab === 'stopwatch') { if (timer) timer.style.display='none'; if (sw) sw.style.display='flex'; }
     else                             { if (timer) timer.style.display='block'; if (sw) sw.style.display='none'; }
   }
+  // Bottom-left shows the date in clock mode, the time otherwise — refresh now.
+  updateDisplayClock();
 }
 
 function _updateBigClock() {
@@ -2260,12 +2268,19 @@ function renderQr(container, label, url, ipDisplay, localName) {
 // ─── DISPLAY CLOCK ────────────────────────────────────────────────
 function updateDisplayClock() {
   const now = new Date();
-  let h = now.getHours();
-  const min = String(now.getMinutes()).padStart(2,'0');
-  const ampm = h >= 12 ? 'pm' : 'am';
-  h = h % 12 || 12;
   const timeEl = document.getElementById('displayTime2');
-  if (timeEl) timeEl.textContent = `${h}:${min} ${ampm}`;
+  if (timeEl) {
+    if (_isIdleClockMode()) {
+      // The big clock already shows the time — show today's date here instead.
+      timeEl.textContent = `${now.getMonth() + 1}/${now.getDate()}/${String(now.getFullYear()).slice(-2)}`;
+    } else {
+      let h = now.getHours();
+      const min = String(now.getMinutes()).padStart(2,'0');
+      const ampm = h >= 12 ? 'pm' : 'am';
+      h = h % 12 || 12;
+      timeEl.textContent = `${h}:${min} ${ampm}`;
+    }
+  }
   _updateBigClock();
   _updateAnalogClock();
 }
