@@ -58,10 +58,17 @@ export default class BjjTimerServer {
       if (!this.config.branding) { this.config.branding = { appName: 'BJJ Mat Timer', tagline: 'Competition · Training · Sparring', logoDataUrl: '' }; changed = true; }
       if (changed) await this.room.storage.put('config', this.config);
     }
-    // Load persisted timer states (survive DO hibernation)
+    // Load persisted timer states (survive DO hibernation). Sanitize orphans:
+    // a "running" timer recovered with no time left is leftover from a restart
+    // or an abandoned class — reset it so TVs don't get stuck on a flashing 0:00.
     for (let i = 1; i <= 4; i++) {
       const ts = await this.room.storage.get('timerState:' + i);
-      if (ts) this.timerStates[i] = ts;
+      if (!ts) continue;
+      if (ts.running && ts.startedAt && (ts.timeRemainingAtStart - Math.floor((Date.now() - ts.startedAt) / 1000)) <= 0) {
+        await this.room.storage.delete('timerState:' + i);
+      } else {
+        this.timerStates[i] = ts;
+      }
     }
     // Ensure alarm is running for any timers recovered from storage
     if (this._hasAnyRunning()) await this._scheduleAlarm();
@@ -141,12 +148,12 @@ export default class BjjTimerServer {
         this._freeCtrlSlot(mat);
       }
 
-      // Timer state: a coach reclaiming their own mat keeps it exactly where it
-      // was (sleep/resume, paused or running); a live round survives a takeover so
-      // it isn't cut off mid-class; but a fresh coach on an idle mat starts clean
-      // rather than inheriting a stale leftover time from an earlier class.
-      const existing = this.timerStates[mat];
-      if (!existing || (!reclaim && !existing.running)) {
+      // Timer state: ONLY a coach reclaiming their own mat (same device, e.g.
+      // waking from sleep) keeps the existing timer. Any other coach starts the
+      // mat clean — we never inherit a previous class's timer or a leftover
+      // "running" zombie (which would otherwise show a stale time, make Start a
+      // no-op, and make Pause jump).
+      if (!this.timerStates[mat] || !reclaim) {
         this.timerStates[mat] = this._newTimerState();
       }
       this.matClientId[mat] = clientId;
@@ -193,7 +200,7 @@ export default class BjjTimerServer {
         color: ctrl ? (ctrl.color || CTRL_COLORS[mat]) : null,
         name:  ctrl ? (this.ctrlNames[mat] || null) : null,
       }));
-      const current = this._computeCurrentState(mat);
+      const current = this._tvStateForMat(mat);
       if (current) connection.send(JSON.stringify({ type: 'state', ...current }));
       this._broadcastMatStatus();
 
@@ -612,6 +619,24 @@ export default class BjjTimerServer {
       s.timeRemaining = Math.max(0, timeRemainingAtStart - Math.floor((Date.now() - startedAt) / 1000));
     }
     return s;
+  }
+
+  // What a TV should display for a mat: the live timer when a coach is on the
+  // mat or a round is genuinely still counting; otherwise a clean idle round so
+  // an unattended TV shows a ready screen instead of a stale/flashing leftover.
+  _tvStateForMat(mat) {
+    const ts = this.timerStates[mat];
+    const live = this.ctrlSlots[mat]
+      || (ts && ts.running && this._computeCurrentState(mat).timeRemaining > 0);
+    if (live) return this._computeCurrentState(mat);
+    const base = ts || this._newTimerState();
+    return {
+      running: false, phase: 'fight', currentRound: 1,
+      roundDuration: base.roundDuration, restDuration: base.restDuration,
+      totalRounds: base.totalRounds, timeRemaining: base.roundDuration,
+      warningEnabled: base.warningEnabled, warningThreshold: base.warningThreshold,
+      showRound: base.showRound,
+    };
   }
 
   async _handlePhaseEnd(slot) {
