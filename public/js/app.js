@@ -1441,10 +1441,6 @@ function _showDisplayView() {
 }
 
 function _onClose(ev) {
-  // DIAGNOSTIC: surface why a controller socket closed.
-  if (mode === 'controller') {
-    try { alert(`DIAG socket closed\ncode=${ev?.code}\nreason=${ev?.reason || '(none)'}\nwasClean=${ev?.wasClean}`); } catch(e) {}
-  }
   if (mode !== 'display') return;
   showReconnectOverlay('Reconnecting…');
   setDisplayStatus('connecting', 'Reconnecting...');
