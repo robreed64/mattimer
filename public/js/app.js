@@ -1462,6 +1462,7 @@ function _showDisplayView() {
   requestLastKnownState();
   setDisplayStatus('connected', 'Live');
   hideConnecting();
+  _refreshDisplayMode();
 }
 
 function _onClose(ev) {
@@ -1563,10 +1564,8 @@ function _onMessage(event) {
 
     case 'tab': {
       if (mode !== 'display') break;
-      const timer = document.getElementById('displayPanelTimer');
-      const sw    = document.getElementById('displayPanelStopwatch');
-      if (msg.tab === 'stopwatch') { if (timer) timer.style.display = 'none'; if (sw) sw.style.display = 'flex'; }
-      else                         { if (timer) timer.style.display = 'block'; if (sw) sw.style.display = 'none'; }
+      _displayTab = msg.tab === 'stopwatch' ? 'stopwatch' : 'timer';
+      _refreshDisplayMode();
       break;
     }
 
@@ -1700,6 +1699,9 @@ function applyDisplayCtrlColor(color, name) {
     textEl.style.color = hex || '';
   }
   if (dot && hex) { dot.style.background = hex; dot.style.boxShadow = `0 0 5px ${hex}`; }
+  // A named coach means the mat is in use → show the timer; otherwise it's idle.
+  _displayCoachActive = !!name;
+  _refreshDisplayMode();
 }
 
 function getSlotColor(slot) {
@@ -1991,10 +1993,49 @@ function applyBranding() {
   const svgEl = document.getElementById('landingLogoSvg'), imgEl = document.getElementById('landingLogoImg');
   if (logo) { if (svgEl) svgEl.style.display='none'; if (imgEl){imgEl.src=logo;imgEl.style.display='block';} }
   else       { if (svgEl) svgEl.style.display='block'; if (imgEl) imgEl.style.display='none'; }
+
+  // Idle-clock setting may have changed — refresh what an idle TV shows.
+  _refreshDisplayMode();
+}
+
+// ─── DISPLAY MODE (idle clock vs. timer) ──────────────────────────
+let _displayCoachActive = false; // is a coach currently running this mat?
+let _displayTab = 'timer';       // which panel the controller last selected
+
+// Decide what an idle TV shows: a big time-of-day clock when the idle-clock
+// setting is on and no coach is running this mat; otherwise the timer/stopwatch.
+function _refreshDisplayMode() {
+  if (mode !== 'display') return;
+  const big   = document.getElementById('displayBigClock');
+  const timer = document.getElementById('displayPanelTimer');
+  const sw    = document.getElementById('displayPanelStopwatch');
+  const clockMode = !!branding.idleClock && !_displayCoachActive;
+  if (clockMode) {
+    if (timer) timer.style.display = 'none';
+    if (sw)    sw.style.display = 'none';
+    if (big)   big.style.display = 'flex';
+    _updateBigClock();
+  } else {
+    if (big) big.style.display = 'none';
+    if (_displayTab === 'stopwatch') { if (timer) timer.style.display='none'; if (sw) sw.style.display='flex'; }
+    else                             { if (timer) timer.style.display='block'; if (sw) sw.style.display='none'; }
+  }
+}
+
+function _updateBigClock() {
+  const el = document.getElementById('displayBigClock');
+  if (!el || el.style.display === 'none') return;
+  const now = new Date();
+  let h = now.getHours();
+  const min = String(now.getMinutes()).padStart(2,'0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  el.innerHTML = `${h}:${min}<span style="font-size:.4em;opacity:.6;letter-spacing:.05em"> ${ampm}</span>`;
 }
 function openBrandingModal() {
   document.getElementById('bName').value     = branding.appName || '';
   document.getElementById('bTagline').value  = branding.tagline || '';
+  document.getElementById('bIdleClock').checked = !!branding.idleClock;
   const logo = branding.logoDataUrl || '';
   const img = document.getElementById('logoPreviewImg'), def = document.getElementById('logoPreviewDefault');
   const bImg = document.getElementById('bPreviewImg'), bSvg = document.getElementById('bPreviewDefaultSvg');
@@ -2075,6 +2116,7 @@ async function saveBranding() {
   const logoInput = document.getElementById('logoUpload');
   branding.appName   = document.getElementById('bName').value.trim() || 'BJJ Mat Timer';
   branding.tagline   = document.getElementById('bTagline').value.trim() || 'Competition · Training · Sparring';
+  branding.idleClock = document.getElementById('bIdleClock').checked;
   if (logoInput._pendingDataUrl) branding.logoDataUrl = logoInput._pendingDataUrl;
   if (roomId) await partyFetch('/api/branding', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...branding }) });
   applyBranding();
@@ -2168,6 +2210,7 @@ function updateDisplayClock() {
   h = h % 12 || 12;
   const timeEl = document.getElementById('displayTime2');
   if (timeEl) timeEl.textContent = `${h}:${min} ${ampm}`;
+  _updateBigClock();
 }
 updateDisplayClock();
 setInterval(updateDisplayClock, 1000);

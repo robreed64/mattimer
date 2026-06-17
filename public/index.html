@@ -611,6 +611,9 @@
       <div class="display-time" id="displayTime">5:00</div>
     </div>
 
+    <!-- Idle screen clock — shown when enabled and no class is running this mat -->
+    <div class="display-bigclock" id="displayBigClock" style="display:none"></div>
+
     <div id="displayPanelStopwatch" style="display:none;flex-direction:column;align-items:center">
       <div class="display-round">Stopwatch</div>
       <div class="display-time" id="displaySwTime">0:00<span style="font-size:.4em;opacity:.55">.00</span></div>
@@ -645,6 +648,13 @@
     <div class="modal-body">
       <div class="modal-field"><label>App Name</label><input type="text" id="bName" placeholder="BJJ Mat Timer" maxlength="40"></div>
       <div class="modal-field"><label>Tagline</label><input type="text" id="bTagline" placeholder="Competition · Training · Sparring" maxlength="60"></div>
+      <div class="modal-field">
+        <label>Idle Screen Clock</label>
+        <div class="toggle-row">
+          <span>Show the time of day on a TV when no class is running on it</span>
+          <label class="toggle"><input type="checkbox" id="bIdleClock"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
       <div class="modal-field">
         <label>Logo Imageel>Logo Image <span style="color:var(--mat-muted);font-weight:400">(PNG, JPG, SVG)</span></label>
         <div class="logo-upload-row">

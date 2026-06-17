@@ -163,6 +163,7 @@
   .display-phase.fight { color: #fff; }
   .display-phase.rest { color: #fff; }
   .display-time { font-family: var(--font-display); font-size: clamp(10rem,32vw,28rem); line-height: .85; letter-spacing: .02em; color: #fff; transition: color .3s; position: relative; z-index: 1; }
+  .display-bigclock { font-family: var(--font-display); font-size: clamp(8rem,26vw,22rem); line-height: 1; letter-spacing: .03em; color: rgba(255,255,255,.92); z-index: 1; text-align: center; }
   .display-time.warning { color: var(--warning-color); }
   .display-time.danger { color: var(--danger-color); animation: flash-red .5s infinite; }
   .display-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity .3s; }
