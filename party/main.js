@@ -23,16 +23,14 @@ function makeId() {
 export default class BjjTimerServer {
   constructor(room) {
     this.room = room;
-    // In-memory session state — resets on hibernation, rebuilt on reconnect
-    this.controllers  = {};
-    this.ctrlSlots    = { 1: null, 2: null, 3: null, 4: null };
-    this.ctrlNames    = { 1: '',   2: '',   3: '',   4: ''   };
-    this.tvOwner      = { 1: null, 2: null, 3: null, 4: null };
-    this.tvDisplays   = { 1: 0,   2: 0,   3: 0,   4: 0    };
-    this.floatingCount = 0;
+    // Mat-centric model: a Mat (1-4) has one timer, one controlling coach, and
+    // any TVs pinned to that mat's code. In-memory bindings reset on
+    // hibernation and rebuild on reconnect; timerStates persist in storage.
+    this.controllers  = {};                                    // connId -> { slot, color, name, clientId, ... }
+    this.ctrlSlots    = { 1: null, 2: null, 3: null, 4: null }; // mat -> controlling connId
+    this.ctrlNames    = { 1: '',   2: '',   3: '',   4: ''   }; // mat -> controlling coach name
     this.config = null;
-    this.timerStates   = { 1: null, 2: null, 3: null, 4: null }; // server-owned timer per ctrl slot
-    this.ctrlIdentities = { 1: null, 2: null, 3: null, 4: null }; // persists across disconnects for reconnect detection
+    this.timerStates  = { 1: null, 2: null, 3: null, 4: null }; // mat -> server-owned timer
     this._alarmPending = false; // track alarm so we don't double-schedule
   }
 
@@ -59,12 +57,10 @@ export default class BjjTimerServer {
       if (!this.config.branding) { this.config.branding = { appName: 'BJJ Mat Timer', tagline: 'Competition · Training · Sparring', logoDataUrl: '' }; changed = true; }
       if (changed) await this.room.storage.put('config', this.config);
     }
-    // Load persisted timer states and controller identities (survive DO hibernation)
+    // Load persisted timer states (survive DO hibernation)
     for (let i = 1; i <= 4; i++) {
       const ts = await this.room.storage.get('timerState:' + i);
       if (ts) this.timerStates[i] = ts;
-      const id = await this.room.storage.get('ctrlIdentity:' + i);
-      if (id) this.ctrlIdentities[i] = id;
     }
     // Ensure alarm is running for any timers recovered from storage
     if (this._hasAnyRunning()) await this._scheduleAlarm();
@@ -93,8 +89,8 @@ export default class BjjTimerServer {
     const role = url.searchParams.get('role') || 'display';
 
     if (role === 'controller') {
-      // Displays and TVs are receive-only (TVs additionally prove a tvCode);
-      // controllers can drive timers on every claimed TV, so they must be authed.
+      // Controllers drive a mat's timer, so they must be authed; TVs/displays
+      // are receive-only (a TV additionally proves its mat code).
       let auth = null;
       if (!this._isDemo) {
         auth = await this._checkAuth(url.searchParams.get('token'));
@@ -111,70 +107,60 @@ export default class BjjTimerServer {
       const color     = url.searchParams.get('color') || null;
       const profileId = url.searchParams.get('profileId') || null;
       const clientId  = url.searchParams.get('clientId')  || null;
+      const authSub   = auth?.sub || null;
 
-      const authSub = auth?.sub || null;
-
-      // Identity takeover: check ctrlIdentities first (persists across disconnects and
-      // hibernation) so a reconnecting coach reclaims their slot even if the old
-      // WebSocket already closed before this connect arrived.
-      let isTakeover = false;
-      let takeoverSlot = null;
-      for (let i = 1; i <= 4; i++) {
-        const id = this.ctrlIdentities[i];
-        if (!id) continue;
-        if ((authSub && id.authSub === authSub) ||
-            (profileId && id.profileId === profileId) ||
-            (clientId && id.clientId === clientId)) {
-          if (this.ctrlSlots[i]) {
-            const old = [...this.room.getConnections('controller')].find(c => c.id === this.ctrlSlots[i]);
-            if (old) old.close();
-            this._freeCtrlSlot(i);
-          }
-          isTakeover = true;
-          takeoverSlot = i;
-          break;
-        }
+      // The coach explicitly chose which mat (1-4) to run.
+      const mat = parseInt(url.searchParams.get('mat'), 10);
+      if (!(mat >= 1 && mat <= 4)) {
+        connection.send(JSON.stringify({ type: 'error', msg: 'No mat selected' }));
+        connection.close();
+        return;
       }
 
-      // Sweep dead connections (crash / hibernation wakeup) — after takeover check.
+      // Sweep dead controller bindings left by crashes/hibernation.
       const liveIds = new Set([...this.room.getConnections('controller')].map(c => c.id));
       for (let i = 1; i <= 4; i++) {
         if (this.ctrlSlots[i] && !liveIds.has(this.ctrlSlots[i])) this._freeCtrlSlot(i);
       }
 
-      // Takeover: reclaim the exact same slot so the timer state is preserved.
-      const slot = (takeoverSlot && !this.ctrlSlots[takeoverSlot])
-        ? takeoverSlot
-        : this._nextFreeCtrlSlot();
+      // Take over the mat if another connection holds it. A same-device reconnect
+      // (matching clientId — e.g. the phone woke from sleep) is silent; a genuinely
+      // different device gets a 'replaced' notice so it stops and doesn't fight back.
+      const prevId = this.ctrlSlots[mat];
+      if (prevId && prevId !== connection.id) {
+        const prevCtrl = this.controllers[prevId];
+        const sameDevice = prevCtrl && clientId && prevCtrl.clientId === clientId;
+        const old = [...this.room.getConnections('controller')].find(c => c.id === prevId);
+        if (old) {
+          if (!sameDevice) { try { old.send(JSON.stringify({ type: 'replaced' })); } catch {} }
+          try { old.close(); } catch {}
+        }
+        this._freeCtrlSlot(mat);
+      }
 
-      if (!slot) {
-        connection.send(JSON.stringify({ type: 'error', msg: 'All 4 controller slots are full' }));
-        connection.close();
-        return;
-      }
-      // Fresh controller gets a clean timer state; reconnecting controller keeps theirs
-      if (!isTakeover || !this.timerStates[slot]) {
-        this.timerStates[slot] = this._newTimerState();
-      }
-      this.ctrlIdentities[slot] = { authSub, profileId, clientId };
-      const ctrlColor = color || CTRL_COLORS[slot];
-      this.controllers[connection.id] = { slot, color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };
-      this.ctrlSlots[slot] = connection.id;
-      this.ctrlNames[slot] = name;
-      connection.setState({ role: 'controller', slot });
-      // Fire-and-forget: in-memory update above handles live reconnects; storage persists identity across hibernation
-      this.room.storage.put('ctrlIdentity:' + slot, { authSub, profileId, clientId });
+      // Preserve a running/paused timer so taking (or reclaiming) a mat picks up
+      // exactly where it left off; only create a fresh state if the mat has none.
+      if (!this.timerStates[mat]) this.timerStates[mat] = this._newTimerState();
+
+      const ctrlColor = color || CTRL_COLORS[mat];
+      this.controllers[connection.id] = { slot: mat, color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };
+      this.ctrlSlots[mat] = connection.id;
+      this.ctrlNames[mat] = name;
+      connection.setState({ role: 'controller', slot: mat });
 
       connection.send(JSON.stringify({
         type:       'config',
         tvCodes:    this.config.tvCodes,
         profiles:   this._safeProfiles(),
         branding:   this.config.branding,
-        ctrlSlot:   slot, ctrlColor, ctrlName: name,
-        timerState: this._computeCurrentState(slot),
+        ctrlSlot:   mat, ctrlColor, ctrlName: name,
+        timerState: this._computeCurrentState(mat),
       }));
-      connection.send(JSON.stringify({ type: 'monitor:status', ...this._buildMonitorStatus() }));
-      this._broadcastMonitorStatus();
+      // Push the controlling coach's color/name and live timer to this mat's TV(s).
+      this._sendToTv(mat, JSON.stringify({ type: 'ctrl:color', color: ctrlColor, name }));
+      const cur = this._computeCurrentState(mat);
+      if (cur) this._sendToTv(mat, JSON.stringify({ type: 'state', ...cur }));
+      this._broadcastMatStatus();
 
     } else if (role === 'tv') {
       const code   = (url.searchParams.get('code') || '').toUpperCase();
@@ -184,33 +170,28 @@ export default class BjjTimerServer {
         connection.close();
         return;
       }
-      const tvSlot = idx + 1;
-      // Close any existing connection on this slot (stale after hibernation, or same
-      // device reconnecting). onClose will decrement tvDisplays for the old connection.
+      const mat = idx + 1; // a TV is permanently pinned to one mat by its code
+      // Replace any stale TV connection still bound to this mat.
       for (const c of this.room.getConnections('tv')) {
-        if (c.state?.tvSlot === tvSlot) c.close();
+        if (c.id !== connection.id && c.state?.tvSlot === mat) { try { c.close(); } catch {} }
       }
-      connection.setState({ role: 'tv', tvSlot });
-      this.tvDisplays[tvSlot]++;
+      connection.setState({ role: 'tv', tvSlot: mat });
       connection.send(JSON.stringify({ type: 'branding', ...this.config.branding }));
-      const ownerSlot = this.tvOwner[tvSlot];
+      // Always reflect the mat's current controlling coach + live timer on connect.
+      const ctrl = this.ctrlSlots[mat] ? this.controllers[this.ctrlSlots[mat]] : null;
       connection.send(JSON.stringify({
         type:  'ctrl:color',
-        color: ownerSlot ? CTRL_COLORS[ownerSlot] : null,
-        name:  ownerSlot ? (this.ctrlNames[ownerSlot] || null) : null,
+        color: ctrl ? (ctrl.color || CTRL_COLORS[mat]) : null,
+        name:  ctrl ? (this.ctrlNames[mat] || null) : null,
       }));
-      // Send current state (computed live from server timer) so TV is immediately accurate
-      if (ownerSlot) {
-        const current = this._computeCurrentState(ownerSlot);
-        if (current) connection.send(JSON.stringify({ type: 'state', ...current }));
-      }
-      this._broadcastMonitorStatus();
+      const current = this._computeCurrentState(mat);
+      if (current) connection.send(JSON.stringify({ type: 'state', ...current }));
+      this._broadcastMatStatus();
 
     } else {
+      // Plain viewer (no mat code) — receive-only, just gets branding.
       connection.setState({ role: 'display' });
-      this.floatingCount++;
       connection.send(JSON.stringify({ type: 'branding', ...this.config.branding }));
-      this._broadcastMonitorStatus();
     }
   }
 
@@ -223,7 +204,9 @@ export default class BjjTimerServer {
       if (ctrl) {
         const { slot } = ctrl;
         const duration = Math.round((Date.now() - (ctrl.connectedAt || Date.now())) / 1000);
-        this._freeCtrlSlot(slot);
+        // Only free the mat if this connection still holds it — a takeover may
+        // have already rebound the slot to a newer connection.
+        if (this.ctrlSlots[slot] === connection.id) this._freeCtrlSlot(slot);
         // Platform-admin visits aren't real classes — keep them out of Recent activity
         if (duration > 30 && ctrl.userRole !== 'admin') {
           (async () => {
@@ -234,12 +217,8 @@ export default class BjjTimerServer {
           })();
         }
       }
-    } else if (st.role === 'tv') {
-      if (st.tvSlot) this.tvDisplays[st.tvSlot] = Math.max(0, this.tvDisplays[st.tvSlot] - 1);
-    } else if (st.role === 'display') {
-      this.floatingCount = Math.max(0, this.floatingCount - 1);
     }
-    this._broadcastMonitorStatus();
+    this._broadcastMatStatus();
   }
 
   async onMessage(message, sender) {
@@ -253,11 +232,9 @@ export default class BjjTimerServer {
         if (!ctrl) return;
         this.ctrlNames[ctrl.slot] = msg.name || 'Unnamed Class';
         this.controllers[sender.id].name = this.ctrlNames[ctrl.slot];
-        for (let tv = 1; tv <= 4; tv++) {
-          if (this.tvOwner[tv] === ctrl.slot)
-            this._sendToTv(tv, JSON.stringify({ type: 'ctrl:color', color: ctrl.color, name: this.ctrlNames[ctrl.slot] }));
-        }
-        this._broadcastMonitorStatus();
+        // Update this mat's TV(s) with the new class name.
+        this._sendToTv(ctrl.slot, JSON.stringify({ type: 'ctrl:color', color: ctrl.color, name: this.ctrlNames[ctrl.slot] }));
+        this._broadcastMatStatus();
         break;
       }
 
@@ -268,25 +245,6 @@ export default class BjjTimerServer {
           profile.settings = { ...profile.settings, ...msg.settings };
           this.room.storage.put('config', this.config);
         }
-        break;
-      }
-
-      case 'tv:claim': {
-        if (!ctrl || msg.tvSlot < 1 || msg.tvSlot > 4) return;
-        this.tvOwner[msg.tvSlot] = ctrl.slot;
-        this._sendToTv(msg.tvSlot, JSON.stringify({ type: 'ctrl:color', color: ctrl.color, name: this.ctrlNames[ctrl.slot] }));
-        // Send live timer state so TV is immediately accurate
-        const tvState = this._computeCurrentState(ctrl.slot);
-        if (tvState) this._sendToTv(msg.tvSlot, JSON.stringify({ type: 'state', ...tvState }));
-        this._broadcastMonitorStatus();
-        break;
-      }
-
-      case 'tv:release': {
-        if (!ctrl || this.tvOwner[msg.tvSlot] !== ctrl.slot) return;
-        this.tvOwner[msg.tvSlot] = null;
-        this._sendToTv(msg.tvSlot, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
-        this._broadcastMonitorStatus();
         break;
       }
 
@@ -428,6 +386,11 @@ export default class BjjTimerServer {
       }, { headers: cors });
     }
 
+    // GET /api/mats — per-mat occupancy for the mat picker
+    if (req.method === 'GET' && apiPath === '/api/mats') {
+      return Response.json({ mats: this._buildMatStatus() }, { headers: cors });
+    }
+
     // GET /api/profiles
     if (req.method === 'GET' && apiPath === '/api/profiles') {
       return Response.json(this._safeProfiles(), { headers: cors });
@@ -537,54 +500,40 @@ export default class BjjTimerServer {
 
   // ─── Private helpers ──────────────────────────────────────────────
 
-  _nextFreeCtrlSlot() {
-    for (let i = 1; i <= 4; i++) if (!this.ctrlSlots[i]) return i;
-    return null;
-  }
-
+  // Release a mat's controller binding. Timer state is intentionally left
+  // intact so a reconnecting/next coach picks up where it left off; the mat's
+  // TV is told the mat is now uncontrolled.
   _freeCtrlSlot(slot) {
     const occupantId = this.ctrlSlots[slot];
     if (!occupantId) return;
     delete this.controllers[occupantId];
     this.ctrlSlots[slot] = null;
     this.ctrlNames[slot] = '';
-    for (let tv = 1; tv <= 4; tv++) {
-      if (this.tvOwner[tv] === slot) {
-        this.tvOwner[tv] = null;
-        this._sendToTv(tv, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
-      }
-    }
+    this._sendToTv(slot, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
   }
 
-  _sendToTv(tvSlot, msg) {
+  // Send a message to every TV pinned to the given mat.
+  _sendToTv(mat, msg) {
     for (const conn of this.room.getConnections('tv')) {
-      if (conn.state?.tvSlot === tvSlot) conn.send(msg);
+      if (conn.state?.tvSlot === mat) conn.send(msg);
     }
   }
 
-  _broadcastMonitorStatus() {
-    const status = JSON.stringify({ type: 'monitor:status', ...this._buildMonitorStatus() });
-    for (const conn of this.room.getConnections('controller')) conn.send(status);
+  // Per-mat occupancy, broadcast to everyone (controllers + the mat picker)
+  // so coaches can see which mats are open vs. in use.
+  _broadcastMatStatus() {
+    this.room.broadcast(JSON.stringify({ type: 'mat:status', mats: this._buildMatStatus() }));
   }
 
-  _buildMonitorStatus() {
-    const tvDisplays = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    for (const conn of this.room.getConnections('tv')) {
-      const s = conn.state;
-      if (s?.tvSlot >= 1 && s?.tvSlot <= 4) tvDisplays[s.tvSlot]++;
+  _buildMatStatus() {
+    const mats = {};
+    for (let i = 1; i <= 4; i++) {
+      const ctrl = this.ctrlSlots[i] ? this.controllers[this.ctrlSlots[i]] : null;
+      mats[i] = ctrl
+        ? { occupied: true, name: this.ctrlNames[i] || 'Coach', color: ctrl.color || CTRL_COLORS[i] }
+        : { occupied: false };
     }
-    return {
-      tvOwner:    { ...this.tvOwner },
-      tvDisplays,
-      floating:   this.floatingCount,
-      ctrlNames:  { ...this.ctrlNames },
-      ctrlSlots:  Object.fromEntries(
-        [1,2,3,4].map(i => [i, this.ctrlSlots[i]
-          ? { connected: true, color: this.controllers[this.ctrlSlots[i]]?.color || CTRL_COLORS[i], name: this.ctrlNames[i] }
-          : null
-        ])
-      ),
-    };
+    return mats;
   }
 
   // Public view of profiles: never expose pin hash/salt (or legacy plaintext)
@@ -708,10 +657,10 @@ export default class BjjTimerServer {
     }
   }
 
-  _sendToTvs(slot, msg) {
-    for (let tv = 1; tv <= 4; tv++) {
-      if (this.tvOwner[tv] === slot) this._sendToTv(tv, msg);
-    }
+  // A mat's TV(s) are pinned by code, so broadcasting to a mat is just
+  // targeting the TV(s) on that mat.
+  _sendToTvs(mat, msg) {
+    this._sendToTv(mat, msg);
   }
 
   _sendSoundToTvs(slot, soundType) {

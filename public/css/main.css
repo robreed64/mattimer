@@ -288,77 +288,28 @@
   .landing-tv-card.tv-taken:hover { transform: none; box-shadow: none; }
   .landing-tv-card.connected { background: rgba(255,255,255,.04); }
 
-  /* ─── MONITOR BAR (controller status bar) ─────────────────────── */
-  .monitor-bar {
-    display: flex;
-    gap: .4rem;
-    align-items: center;
-    flex: 1;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
+  /* ─── MAT LABEL (controller status bar) ──────────────────────── */
+  .mat-label { font-family: var(--font-display); font-size: 1.2rem; letter-spacing: .12em; color: var(--mat-gold); line-height: 1; }
 
-  .monitor-panel {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
+  /* ─── MAT PICKER ──────────────────────────────────────────────── */
+  .mat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+  .mat-card {
+    display: flex; flex-direction: column; gap: .3rem;
     background: var(--mat-surface);
     border: 1px solid var(--mat-border);
-    border-left: 3px solid var(--mat-border);
-    border-radius: 4px;
-    padding: .3rem .65rem .3rem .5rem;
-    min-width: 110px;
-    transition: all .2s;
-    position: relative;
-  }
-
-  .monitor-panel.tv-color-1 { border-left-color: var(--tv1); }
-  .monitor-panel.tv-color-2 { border-left-color: var(--tv2); }
-  .monitor-panel.tv-color-3 { border-left-color: var(--tv3); }
-  .monitor-panel.tv-color-4 { border-left-color: var(--tv4); }
-  .monitor-panel.monitor-floating { border-left-color: var(--tv-float); }
-
-  .monitor-panel.active { background: rgba(255,255,255,.05); }
-  .monitor-panel.tv-color-1.active { background: rgba(59,130,246,.08); border-color: rgba(59,130,246,.4); border-left-color: var(--tv1); }
-  .monitor-panel.tv-color-2.active { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.4); border-left-color: var(--tv2); }
-  .monitor-panel.tv-color-3.active { background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.4); border-left-color: var(--tv3); }
-  .monitor-panel.tv-color-4.active { background: rgba(236,72,153,.08); border-color: rgba(236,72,153,.4); border-left-color: var(--tv4); }
-  .monitor-panel.monitor-floating.active { background: rgba(139,92,246,.08); border-color: rgba(139,92,246,.4); border-left-color: var(--tv-float); }
-
-  .monitor-icon { font-size: .95rem; opacity: .5; transition: opacity .2s; }
-  .monitor-panel.active .monitor-icon { opacity: 1; }
-
-  .monitor-info { display: flex; flex-direction: column; gap: .05rem; flex: 1; min-width: 0; }
-  .monitor-label { font-family: var(--font-ui); font-size: .7rem; font-weight: 700; letter-spacing: .15em; color: var(--mat-muted); text-transform: uppercase; }
-  .monitor-panel.active .monitor-label { color: var(--mat-text); }
-  .monitor-status-text { font-family: var(--font-ui); font-size: .65rem; letter-spacing: .05em; color: var(--mat-border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .monitor-panel.active .monitor-status-text { color: var(--mat-muted); }
-
-  .monitor-badge { font-family: var(--font-ui); font-size: .65rem; letter-spacing: .1em; color: var(--mat-border); font-weight: 700; }
-
-  .monitor-claim-btn {
-    background: none;
-    border: 1px solid var(--mat-border);
-    border-radius: 3px;
-    color: var(--mat-muted);
+    border-left: 4px solid var(--mat-border);
+    border-radius: 8px;
+    padding: 1.1rem 1rem;
     cursor: pointer;
-    font-family: var(--font-ui);
-    font-size: .65rem;
-    font-weight: 700;
-    letter-spacing: .08em;
-    padding: .2rem .4rem;
-    white-space: nowrap;
+    text-align: left;
     transition: all .15s;
-    flex-shrink: 0;
   }
-  .monitor-claim-btn:hover { border-color: var(--mat-text); color: var(--mat-text); }
+  .mat-card:hover { border-color: var(--mat-gold); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  .mat-card-num { font-family: var(--font-display); font-size: 1.6rem; letter-spacing: .08em; color: var(--mat-text); line-height: 1; }
+  .mat-card-status { font-family: var(--font-ui); font-size: .72rem; letter-spacing: .1em; color: var(--mat-muted); text-transform: uppercase; }
+  .mat-card.mat-in-use { opacity: .7; }
+  .mat-card.mat-in-use .mat-card-status { color: var(--warning-color); }
 
-  .monitor-conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mat-border); flex-shrink: 0; transition: all .3s; }
-  .monitor-panel.tv-color-1.active .monitor-conn-dot { background: var(--tv1); box-shadow: 0 0 6px var(--tv1); }
-  .monitor-panel.tv-color-2.active .monitor-conn-dot { background: var(--tv2); box-shadow: 0 0 6px var(--tv2); }
-  .monitor-panel.tv-color-3.active .monitor-conn-dot { background: var(--tv3); box-shadow: 0 0 6px var(--tv3); }
-  .monitor-panel.tv-color-4.active .monitor-conn-dot { background: var(--tv4); box-shadow: 0 0 6px var(--tv4); }
-  .monitor-panel.monitor-floating.active .monitor-conn-dot { background: var(--tv-float); box-shadow: 0 0 6px var(--tv-float); animation: pulse-dot 2s infinite; }
   .landing-tv-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; width: 100%; max-width: 680px; margin-bottom: 2rem; }
   .landing-tv-card { background: var(--mat-panel); border: 1px solid var(--mat-border); border-radius: 6px; padding: 1.25rem .75rem 1rem; text-align: center; cursor: pointer; transition: all .2s; position: relative; overflow: hidden; }
   .landing-tv-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--mat-gold); transform: scaleX(0); transition: transform .2s; }
@@ -449,13 +400,9 @@
     .ctrl-buttons { flex-direction: column; align-items: stretch; }
   }
 
-  /* ─── STATUS BAR (mobile) — stack groups instead of overflowing ── */
+  /* ─── STATUS BAR (mobile) — let the three groups wrap to their own rows ── */
   @media (max-width: 600px) {
-    .status-bar > div:first-child,
-    .status-bar > div:last-child {
-      flex-basis: 100%;
-      justify-content: center;
-    }
-    .monitor-bar { justify-content: center; }
-    .monitor-panel { min-width: 92px; }
+    .status-bar { justify-content: center; gap: .5rem; }
+    .status-bar > div { justify-content: center; }
+    .mat-grid { grid-template-columns: 1fr; }
   }

@@ -240,6 +240,19 @@
 <!-- ─── NETWORK BOX (landing) ───────────────────────────────────── -->
 
 <!-- ─── PROFILE PICKER ────────────────────────────────────────────── -->
+<!-- ─── MAT PICKER MODAL ──────────────────────────────────────────── -->
+<div id="matPickerModal" class="modal-backdrop" style="display:none" onclick="closeMatPicker(event)">
+  <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">🥋 Which Mat?</span>
+      <button class="modal-close" onclick="closeMatPicker()">✕</button>
+    </div>
+    <div class="modal-body" style="gap:.75rem">
+      <div class="mat-grid" id="matGrid"><!-- populated by JS --></div>
+    </div>
+  </div>
+</div>
+
 <div id="profilePickerModal" class="modal-backdrop" style="display:none" onclick="closeProfilePicker(event)">
   <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
     <div class="modal-header">
@@ -384,53 +397,10 @@
       <span><span class="status-dot connected" id="ctrlDot"></span><span id="ctrlStatusText" style="font-family:var(--font-ui);letter-spacing:.1em;cursor:pointer;border-bottom:1px dashed var(--mat-border)" onclick="openRenameSession()" title="Click to rename session">Live</span></span>
       <button class="brand-btn" onclick="openBrandingModal()" title="White Label Settings">⚙</button>
     </div>
-    <!-- Monitor status panels -->
-    <div class="monitor-bar">
-      <div class="monitor-panel tv-color-1" id="monitor-1">
-        <div class="monitor-icon">🖥</div>
-        <div class="monitor-info">
-          <div class="monitor-label">TV 1</div>
-          <div class="monitor-status-text" id="monitor-status-1">Available</div>
-        </div>
-        <button class="monitor-claim-btn" id="monitor-claim-1" onclick="claimTv(1)">+ Claim</button>
-        <div class="monitor-conn-dot" id="monitor-dot-1"></div>
-      </div>
-      <div class="monitor-panel tv-color-2" id="monitor-2">
-        <div class="monitor-icon">🖥</div>
-        <div class="monitor-info">
-          <div class="monitor-label">TV 2</div>
-          <div class="monitor-status-text" id="monitor-status-2">Available</div>
-        </div>
-        <button class="monitor-claim-btn" id="monitor-claim-2" onclick="claimTv(2)">+ Claim</button>
-        <div class="monitor-conn-dot" id="monitor-dot-2"></div>
-      </div>
-      <div class="monitor-panel tv-color-3" id="monitor-3">
-        <div class="monitor-icon">🖥</div>
-        <div class="monitor-info">
-          <div class="monitor-label">TV 3</div>
-          <div class="monitor-status-text" id="monitor-status-3">Available</div>
-        </div>
-        <button class="monitor-claim-btn" id="monitor-claim-3" onclick="claimTv(3)">+ Claim</button>
-        <div class="monitor-conn-dot" id="monitor-dot-3"></div>
-      </div>
-      <div class="monitor-panel tv-color-4" id="monitor-4">
-        <div class="monitor-icon">🖥</div>
-        <div class="monitor-info">
-          <div class="monitor-label">TV 4</div>
-          <div class="monitor-status-text" id="monitor-status-4">Available</div>
-        </div>
-        <button class="monitor-claim-btn" id="monitor-claim-4" onclick="claimTv(4)">+ Claim</button>
-        <div class="monitor-conn-dot" id="monitor-dot-4"></div>
-      </div>
-      <!-- Floating displays counter -->
-      <div class="monitor-panel monitor-floating" id="monitor-floating">
-        <div class="monitor-icon">📱</div>
-        <div class="monitor-info">
-          <div class="monitor-label">Floating</div>
-          <div class="monitor-status-text" id="monitor-floating-count">0 connected</div>
-        </div>
-        <div class="monitor-conn-dot" id="monitor-floating-dot"></div>
-      </div>
+    <!-- Which mat this phone is running -->
+    <div style="display:flex;align-items:center;gap:.6rem">
+      <span id="matLabel" class="mat-label">Mat</span>
+      <button class="btn btn-outline" style="font-size:.7rem;padding:.25rem .6rem" onclick="exitToProfilePicker()" title="Switch to a different mat or coach">⇄ Switch</button>
     </div>
     <div style="display:flex;align-items:center;gap:.5rem">
       <button class="btn btn-outline" id="coachesBtn" style="font-size:.75rem;padding:.3rem .75rem;display:none" onclick="openCoachesModal()">Team</button>

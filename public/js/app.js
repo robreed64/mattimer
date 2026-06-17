@@ -112,7 +112,7 @@ async function _redeemPairingCode(code) {
     _roomToken = data.roomToken; _roomTokenExp = data.roomTokenExp;
     _gymRole = 'coach';
     await _finishRoomSetup();
-    openProfilePicker();
+    openMatPicker();
     return true;
   } catch(e) {
     return false;
@@ -128,7 +128,7 @@ async function _resumeDeviceSession() {
   if (!token) return false;
   _gymRole = 'coach';
   await _finishRoomSetup();
-  openProfilePicker();
+  openMatPicker();
   return true;
 }
 
@@ -943,11 +943,10 @@ let tvCodes = [];
 let branding = { appName: 'BJJ Mat Timer', tagline: 'Competition · Training · Sparring', logoDataUrl: '' };
 
 // ─── CONTROLLER IDENTITY ──────────────────────────────────────────
-let myCtrlSlot  = null;
+let myCtrlSlot  = null;   // which mat (1-4) this device is controlling
 let myCtrlColor = null;
 let myCtrlName  = '';
-let myTvClaims  = new Set();
-let _pendingAutoReclaim = false;
+let _wasReplaced = false;  // set when another device took over our mat
 
 const CTRL_COLOR_HEX = {
   blue: '#3B82F6', green: '#10B981', amber: '#F59E0B', pink: '#EC4899',
@@ -1118,7 +1117,47 @@ if (roomId) {
 let profiles = [];
 let _pendingProfile = null;
 
+// Entry to running a timer: first pick which mat, then identify the coach.
 function promptControllerPassword() {
+  openMatPicker();
+}
+
+// ─── MAT PICKER ───────────────────────────────────────────────────
+let _selectedMat = null;
+
+function openMatPicker() {
+  const modal = document.getElementById('matPickerModal');
+  if (!modal) return;
+  renderMatGrid({});
+  modal.style.display = 'flex';
+  // Pull live occupancy so coaches see which mats are open vs. in use.
+  partyFetch('/api/mats').then(r => r.json()).then(d => renderMatGrid(d.mats || {})).catch(() => {});
+}
+
+function closeMatPicker(e) {
+  if (e && e.target !== document.getElementById('matPickerModal')) return;
+  document.getElementById('matPickerModal').style.display = 'none';
+}
+
+function renderMatGrid(mats) {
+  const grid = document.getElementById('matGrid');
+  if (!grid) return;
+  grid.innerHTML = [1,2,3,4].map(n => {
+    const m = mats[n] || {};
+    const inUse = m.occupied;
+    const sub = inUse ? `In use — ${escHtml(m.name || 'Coach')}` : 'Open';
+    const accent = m.color || getSlotColor(n);
+    return `<button class="mat-card${inUse ? ' mat-in-use' : ''}" onclick="selectMat(${n})" style="border-left-color:${accent}">
+      <span class="mat-card-num">Mat ${n}</span>
+      <span class="mat-card-status">${sub}</span>
+    </button>`;
+  }).join('');
+}
+
+function selectMat(n) {
+  _selectedMat = n;
+  document.getElementById('matPickerModal').style.display = 'none';
+  // Platform admins skip coach profiles and go straight in.
   if (_currentUser?.app_metadata?.role === 'admin') {
     myCtrlName = _currentUser.email || 'Admin';
     startController();
@@ -1326,17 +1365,32 @@ function _getCtrlDeviceId() {
   return id;
 }
 
-function startController() {
-  mode = 'controller';
-  openSocket('controller', {
+function _controllerSocketParams() {
+  return {
+    mat:       _selectedMat || 1,
     name:      encodeURIComponent(myCtrlName || 'Unnamed Class'),
     color:     _pendingProfile?.color || '',
     profileId: _pendingProfile?.id    || '',
     clientId:  _getCtrlDeviceId(),
-  });
+  };
+}
+
+function startController() {
+  mode = 'controller';
+  _wasReplaced = false;
+  myCtrlSlot = _selectedMat || 1;
+  openSocket('controller', _controllerSocketParams());
   document.getElementById('landing').style.display    = 'none';
   document.getElementById('controller').style.display = 'block';
+  _updateMatLabel();
   updateUI();
+}
+
+// Simple "Mat N — coach" label in the controller status bar (replaces the
+// old TV claim/release monitor bar).
+function _updateMatLabel() {
+  const el = document.getElementById('matLabel');
+  if (el) el.textContent = `Mat ${_selectedMat || myCtrlSlot || ''}`.trim();
 }
 
 // ─── LANDING: tap TV card to connect this device as that display ──
@@ -1402,13 +1456,14 @@ function _onMessage(event) {
     case 'config': {
       tvCodes  = msg.tvCodes;
       branding = { ...branding, ...msg.branding };
-      if (msg.ctrlSlot)  { myCtrlSlot = msg.ctrlSlot; _pendingAutoReclaim = true; }
+      if (msg.ctrlSlot)  myCtrlSlot = msg.ctrlSlot;
       if (msg.ctrlColor) myCtrlColor = msg.ctrlColor;
       applyBranding();
       applyControllerColor();
+      _updateMatLabel();
       // Sync timer: if server already has a timer state (running or paused), apply it
-      // silently so we don't discard a paused mid-round position on reconnect.
-      // Only push local settings when the server has no timer state yet (fresh slot).
+      // silently so a reconnect (e.g. phone waking from sleep) picks up the live
+      // position. Only push local settings when the mat has no timer state yet.
       if (msg.timerState) {
         applyControllerStateSnapshot(msg.timerState, { silent: true });
       } else {
@@ -1421,79 +1476,24 @@ function _onMessage(event) {
       break;
     }
 
-    case 'monitor:status': {
-      if (mode !== 'controller') break;
-      const { tvOwner, tvDisplays, floating, ctrlSlots, ctrlNames } = msg;
-      for (let i = 1; i <= 4; i++) {
-        const dispCount  = tvDisplays?.[i] || 0;
-        const ownerSlot  = tvOwner?.[i] || null;
-        const ownerColor = ownerSlot ? CTRL_COLOR_HEX[['','blue','green','amber','pink'][ownerSlot]] : null;
-        const ownerName  = ownerSlot ? (ctrlNames?.[ownerSlot] || 'Unnamed Class') : null;
-        const isMine     = ownerSlot === myCtrlSlot;
-        const panel      = document.getElementById('monitor-' + i);
-        const statusEl   = document.getElementById('monitor-status-' + i);
-        const claimBtn   = document.getElementById('monitor-claim-' + i);
-        panel?.classList.remove('active','owned','foreign');
-        if (dispCount > 0 || ownerSlot) panel?.classList.add('active');
-        if (panel) {
-          if (ownerColor) {
-            panel.style.background = ownerColor + '12';
-            panel.style.borderColor = ownerColor + '55';
-            panel.style.borderLeftColor = ownerColor;
-          } else {
-            panel.style.background = '';
-            panel.style.borderColor = '';
-            panel.style.borderLeftColor = 'var(--mat-border)';
-          }
-        }
-        if (statusEl) {
-          if (ownerSlot && dispCount > 0)      statusEl.textContent = (isMine ? 'My class' : ownerName) + (dispCount > 1 ? ' · ' + dispCount + ' screens' : '');
-          else if (ownerSlot)                  statusEl.textContent = (isMine ? 'My class' : ownerName) + ' · no screen';
-          else if (dispCount > 0)              statusEl.textContent = dispCount + ' screen' + (dispCount > 1 ? 's' : '') + ' · unclaimed';
-          else                                 statusEl.textContent = 'Available';
-        }
-        const dotEl = document.getElementById('monitor-dot-' + i);
-        if (dotEl) { dotEl.style.background = ownerColor || (dispCount > 0 ? '#555' : ''); dotEl.style.boxShadow = ownerColor ? `0 0 6px ${ownerColor}` : ''; }
-        if (claimBtn) {
-          if (isMine) {
-            claimBtn.textContent = '✕ Release'; claimBtn.style.color = CTRL_COLOR_HEX[myCtrlColor] || ''; claimBtn.style.borderColor = (CTRL_COLOR_HEX[myCtrlColor] || '') + '88'; claimBtn.onclick = () => releaseTv(i);
-          } else if (!ownerSlot) {
-            claimBtn.textContent = '+ Claim'; claimBtn.style.color = ''; claimBtn.style.borderColor = ''; claimBtn.onclick = () => claimTv(i);
-          } else {
-            claimBtn.textContent = 'In use'; claimBtn.style.color = '#555'; claimBtn.style.borderColor = ''; claimBtn.onclick = null;
-          }
-        }
-        const landingStatus = document.getElementById('landing-tv-status-' + i);
-        const landingCard   = document.getElementById('landing-tv-' + i);
-        const landingHint   = document.getElementById('landing-tv-hint-' + i);
-        if (dispCount > 0) {
-          landingCard?.classList.add('connected','tv-taken');
-          if (landingHint) landingHint.textContent = '● In use';
-          if (landingStatus) { landingStatus.style.background = ownerColor || getSlotColor(i); landingStatus.style.boxShadow = `0 0 8px ${ownerColor || getSlotColor(i)}`; }
-        } else {
-          landingCard?.classList.remove('connected','tv-taken');
-          if (landingHint) landingHint.textContent = 'tap to connect';
-          if (landingStatus) { landingStatus.style.background = ''; landingStatus.style.boxShadow = ''; }
-        }
+    // Live per-mat occupancy — only meaningful while the mat picker is open.
+    case 'mat:status': {
+      if (document.getElementById('matPickerModal')?.style.display === 'flex') {
+        renderMatGrid(msg.mats || {});
       }
-      const floatPanel = document.getElementById('monitor-floating');
-      const floatCount = document.getElementById('monitor-floating-count');
-      const floatDot   = document.getElementById('monitor-floating-dot');
-      if (floating > 0) {
-        floatPanel?.classList.add('active');
-        if (floatCount) floatCount.textContent = floating + ' connected';
-        if (floatDot) { floatDot.style.background = 'var(--tv-float)'; floatDot.style.boxShadow = '0 0 6px var(--tv-float)'; }
-      } else {
-        floatPanel?.classList.remove('active');
-        if (floatCount) floatCount.textContent = '0 connected';
-        if (floatDot) { floatDot.style.background = ''; floatDot.style.boxShadow = ''; }
-      }
-      if (_pendingAutoReclaim && myCtrlSlot) {
-        _pendingAutoReclaim = false;
-        for (const tv of _loadClaimedTvs()) {
-          if (!tvOwner?.[tv]) claimTv(tv);
-        }
-      }
+      break;
+    }
+
+    // Another device took over this mat — stop fighting for it and bounce the
+    // coach back to the mat picker.
+    case 'replaced': {
+      _wasReplaced = true;
+      if (socket) { try { socket.close(); } catch(e) {} }
+      mode = null;
+      document.getElementById('controller').style.display = 'none';
+      document.getElementById('landing').style.display = 'flex';
+      toast('This mat was taken over on another device.');
+      openMatPicker();
       break;
     }
 
@@ -1599,6 +1599,28 @@ function hideReconnectOverlay() {
   if (el) el.style.display = 'none';
 }
 
+// ─── VISIBILITY RECOVERY ──────────────────────────────────────────
+// A backgrounded/locked phone can leave its WebSocket reporting OPEN while
+// the OS has silently suspended the network stack underneath it — a press
+// like "Resume" appears to send fine client-side but never reaches the
+// server until something forces a fresh connection. Force a clean
+// reconnect whenever the page regains visibility after being hidden for a
+// while, so a zombied connection can't silently swallow commands.
+let _hiddenAt = null;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { _hiddenAt = Date.now(); return; }
+  const wasHiddenAWhile = _hiddenAt && (Date.now() - _hiddenAt >= 5000);
+  _hiddenAt = null;
+  if (!wasHiddenAWhile || !roomId || _wasReplaced) return;
+  // Reconnect to the same mat with the same clientId — the server treats this
+  // as a silent same-device reclaim and replies with the live timer state.
+  if (mode === 'controller') {
+    openSocket('controller', _controllerSocketParams());
+  } else if (mode === 'display' && _displayTvCode) {
+    openSocket('tv', { code: _displayTvCode });
+  }
+});
+
 // Auto-connect as TV display if ?room=X&tv=CODE is in the URL
 (function checkTvBookmark() {
   const tvCode = _urlParams.get('tv');
@@ -1609,35 +1631,16 @@ function hideReconnectOverlay() {
   }
 })();
 
-// ─── TV CLAIM / RELEASE ───────────────────────────────────────────
-function _saveClaimedTvs() {
-  if (!roomId) return;
-  localStorage.setItem('mattimer_tv_claims_' + roomId, JSON.stringify([...myTvClaims]));
-}
-function _loadClaimedTvs() {
-  try { return JSON.parse(localStorage.getItem('mattimer_tv_claims_' + roomId) || '[]'); }
-  catch { return []; }
-}
-function claimTv(tvSlot) {
-  emit('tv:claim', { tvSlot });
-  myTvClaims.add(tvSlot);
-  _saveClaimedTvs();
-}
-function releaseTv(tvSlot) {
-  emit('tv:release', { tvSlot });
-  myTvClaims.delete(tvSlot);
-  _saveClaimedTvs();
-}
-
-// Ends the current coach's session (releases any claimed TVs, closes the
-// controller socket) and drops back to the profile picker — does not touch
-// the device's pairing in localStorage, so this phone stays connected to
-// the gym for the next profile pick.
+// Ends the current coach's session (closes the controller socket, which frees
+// the mat on the server) and returns to the mat picker. Does not touch the
+// device's pairing in localStorage, so this phone stays connected to the gym.
 function exitToProfilePicker() {
-  for (const tv of [...myTvClaims]) releaseTv(tv);
   if (socket) { try { socket.close(); } catch(e) {} }
-  myCtrlName = null; _pendingProfile = null;
-  openProfilePicker();
+  mode = null;
+  myCtrlName = null; _pendingProfile = null; _selectedMat = null;
+  document.getElementById('controller').style.display = 'none';
+  document.getElementById('landing').style.display = 'flex';
+  openMatPicker();
 }
 
 // ─── CONTROLLER COLOR IDENTITY ────────────────────────────────────
