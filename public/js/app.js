@@ -989,7 +989,35 @@ function playBuzzer() {
     osc.start(now); osc.stop(now + d + 0.1);
   });
 }
+// Prominent two-blast air horn for the round START — bright, harmonically rich,
+// with a fast attack and a slight upward pitch bend (reads as "go"). Deliberately
+// distinct from the descending klaxon end buzzer: two short honks vs one long
+// sweep, higher pitch, rising vs falling.
+function _airHorn() {
+  const ctx = getAudioCtx(), now = ctx.currentTime;
+  const blast = (offset, dur) => {
+    const out = ctx.createGain();
+    out.connect(ctx.destination);
+    out.gain.setValueAtTime(0.0001, now + offset);
+    out.gain.exponentialRampToValueAtTime(0.5, now + offset + 0.02); // punchy attack
+    out.gain.setValueAtTime(0.5, now + offset + dur - 0.05);
+    out.gain.exponentialRampToValueAtTime(0.0001, now + offset + dur);
+    [[233, 'sawtooth', 0.5], [349, 'sawtooth', 0.28], [466, 'square', 0.18], [699, 'square', 0.1]]
+      .forEach(([f, type, v]) => {
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(f, now + offset);
+        osc.frequency.linearRampToValueAtTime(f * 1.04, now + offset + dur);
+        g.gain.value = v;
+        osc.connect(g); g.connect(out);
+        osc.start(now + offset); osc.stop(now + offset + dur + 0.05);
+      });
+  };
+  blast(0, 0.3);
+  blast(0.36, 0.5); // "honk-hooonk"
+}
 function testBuzzer() { SOUND_THEMES[soundTheme].buzzerSound(); }
+function testStart()  { SOUND_THEMES[soundTheme].startSound(); }
 
 // ─── SOUND THEMES ─────────────────────────────────────────────────
 function _ringBell(freq, dur, vol, delay = 0) {
@@ -1011,28 +1039,28 @@ const SOUND_THEMES = {
   classic: {
     countdownBeep() { playCountdownBeep(); },
     accentBeep()    { playAccentBeep(); },
-    startSound()    { beep(660, 0.12, 'sine', 0.5); },
+    startSound()    { _airHorn(); },
     restSound()     { beep(330, 0.3, 'sine', 0.45); beep(294, 0.3, 'sine', 0.35, 0.25); },
     buzzerSound()   { playBuzzer(); },
   },
   bell: {
     countdownBeep() { beep(1800, 0.05, 'sine', 0.3); },
     accentBeep()    { _ringBell(500, 0.3, 0.7); _ringBell(500, 0.3, 0.7, 0.08); },
-    startSound()    { _ringBell(500, 1.5, 0.9); },
+    startSound()    { _airHorn(); },
     restSound()     { _ringBell(330, 1.2, 0.6); },
     buzzerSound()   { _ringBell(500, 1.0, 0.9); _ringBell(500, 1.0, 0.9, 0.28); _ringBell(500, 1.0, 0.9, 0.56); },
   },
   digital: {
     countdownBeep() { beep(1000, 0.07, 'sine', 0.35); },
     accentBeep()    { beep(1000, 0.08, 'sine', 0.4); beep(1500, 0.08, 'sine', 0.4, 0.1); },
-    startSound()    { beep(523, 0.1, 'sine', 0.4); beep(659, 0.1, 'sine', 0.4, 0.1); beep(784, 0.15, 'sine', 0.45, 0.2); },
+    startSound()    { _airHorn(); },
     restSound()     { beep(660, 0.12, 'sine', 0.35); beep(523, 0.15, 'sine', 0.35, 0.15); },
     buzzerSound()   { _digitalAlarm(); },
   },
   minimal: {
     countdownBeep() { beep(440, 0.06, 'sine', 0.15); },
     accentBeep()    { beep(660, 0.08, 'sine', 0.2); },
-    startSound()    { beep(880, 0.12, 'sine', 0.25); },
+    startSound()    { _airHorn(); },
     restSound()     { beep(440, 0.15, 'sine', 0.2); },
     buzzerSound()   { beep(330, 0.3, 'sine', 0.3); beep(294, 0.3, 'sine', 0.25, 0.35); },
   },
