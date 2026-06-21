@@ -165,10 +165,10 @@
   .display-time { font-family: var(--font-display); font-size: clamp(10rem,32vw,28rem); line-height: .85; letter-spacing: .02em; color: #fff; transition: color .3s; position: relative; z-index: 1; }
   .display-bigclock { font-family: var(--font-display); font-size: clamp(8rem,26vw,22rem); line-height: 1; letter-spacing: .03em; color: rgba(255,255,255,.92); z-index: 1; text-align: center; }
   .display-analog { width: min(60vh, 60vw); height: min(60vh, 60vw); z-index: 1; }
-  .display-analog .clock-face { fill: none; stroke: rgba(255,255,255,.2); stroke-width: 2; }
-  .display-analog .clock-tick { stroke: rgba(255,255,255,.55); stroke-width: 2; }
-  .display-analog .clock-tick.major { stroke: rgba(255,255,255,.9); stroke-width: 4; }
-  .display-analog .clock-hand { stroke: #fff; stroke-linecap: round; }
+  .display-analog .clock-face { fill: #fff; stroke: rgba(0,0,0,.15); stroke-width: 2; }
+  .display-analog .clock-tick { stroke: rgba(0,0,0,.45); stroke-width: 2; }
+  .display-analog .clock-tick.major { stroke: rgba(0,0,0,.85); stroke-width: 4; }
+  .display-analog .clock-hand { stroke: #1a1a1a; stroke-linecap: round; }
   .display-analog .clock-hand.hour { stroke-width: 6; }
   .display-analog .clock-hand.min  { stroke-width: 4; }
   .display-analog .clock-hand.sec  { stroke: var(--mat-gold); stroke-width: 2; }
