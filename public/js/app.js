@@ -1570,6 +1570,12 @@ function _onMessage(event) {
         // server's authoritative timer so we pick up exactly where it is.
         applyControllerStateSnapshot(msg.timerState, { silent: true });
       }
+      // On a reconnect/takeover (not a deliberate fresh login), also restore the
+      // server-owned stopwatch and active tab so an iOS-sleep resume continues.
+      if (!_freshLogin) {
+        if (msg.stopwatchState) swAdoptSnapshot(msg.stopwatchState);
+        if (msg.tab) _applyTabUI(msg.tab === 'stopwatch' ? 'stopwatch' : 'timer');
+      }
       _freshLogin = false;
       break;
     }
@@ -1639,12 +1645,17 @@ function _onMessage(event) {
       if (mode !== 'display') break;
       cancelAnimationFrame(dispSwRaf);
       const latency = Date.now() - msg.ts;
-      let dispElapsed = msg.elapsed + (msg.running ? latency : 0);
-      const swEl = document.getElementById('displaySwTime');
+      // Seed from the authoritative elapsed, then count via a real-time anchor
+      // (performance.now delta) rather than +16/frame. This stays wall-clock
+      // accurate between the 1 Hz frames AND through a multi-minute controller
+      // sleep where no further frames arrive; each new sw:state re-seeds.
+      const seed   = msg.elapsed + (msg.running ? latency : 0);
+      const anchor = performance.now();
+      const swEl   = document.getElementById('displaySwTime');
       function dispSwTick() {
-        if (msg.running) dispElapsed += 16;
+        const disp = msg.running ? seed + (performance.now() - anchor) : seed;
         if (swEl) swEl.innerHTML = (() => {
-          const mins = Math.floor(dispElapsed/60000), secs = Math.floor((dispElapsed%60000)/1000), cs = Math.floor((dispElapsed%1000)/10);
+          const mins = Math.floor(disp/60000), secs = Math.floor((disp%60000)/1000), cs = Math.floor((disp%1000)/10);
           return `${mins}:${String(secs).padStart(2,'0')}<span style="font-size:.4em;opacity:.55">.${String(cs).padStart(2,'0')}</span>`;
         })();
         if (msg.running) dispSwRaf = requestAnimationFrame(dispSwTick);
@@ -1984,12 +1995,17 @@ function setDisplayStatus(status, text) {
 
 // ─── TABS ─────────────────────────────────────────────────────────
 let activeTab = 'timer';
-function switchTab(tab) {
+// Toggle the controller's tab UI without telling the server — used when adopting
+// the server's remembered tab on reconnect (so we don't echo it back).
+function _applyTabUI(tab) {
   activeTab = tab;
   document.getElementById('tabTimer').classList.toggle('active', tab === 'timer');
   document.getElementById('tabStopwatch').classList.toggle('active', tab === 'stopwatch');
   document.getElementById('panelTimer').classList.toggle('hidden', tab !== 'timer');
   document.getElementById('panelStopwatch').classList.toggle('hidden', tab !== 'stopwatch');
+}
+function switchTab(tab) {
+  _applyTabUI(tab);
   emit('tab', { tab });
 }
 
@@ -2040,6 +2056,27 @@ function swReset() {
   document.getElementById('swStartPauseBtn').textContent = '▶ Start';
   document.getElementById('swStartPauseBtn').className = 'btn btn-green btn-massive';
   swBroadcast();
+}
+
+// Adopt the server's authoritative stopwatch on reconnect (sleep/resume) so the
+// controller resumes from the exact live elapsed. snap = { running, elapsed, ts }
+// already re-anchored server-side; we add any remaining in-flight time.
+function swAdoptSnapshot(snap) {
+  cancelAnimationFrame(swRafId);
+  clearInterval(swBroadcastTimer);
+  swElapsed = (snap.elapsed || 0) + (snap.running ? Date.now() - snap.ts : 0);
+  swRunning = !!snap.running;
+  document.getElementById('swDisplay').innerHTML = swFormatDisplay(swElapsed);
+  const btn = document.getElementById('swStartPauseBtn');
+  if (swRunning) {
+    swStartTime = Date.now();
+    btn.textContent = '⏸ Pause'; btn.className = 'btn btn-red btn-massive';
+    swRafId = requestAnimationFrame(swTick);
+    swBroadcastTimer = setInterval(swBroadcast, 1000);
+  } else {
+    btn.textContent = swElapsed > 0 ? '▶ Resume' : '▶ Start';
+    btn.className = 'btn btn-green btn-massive';
+  }
 }
 
 // ─── BRANDING ─────────────────────────────────────────────────────

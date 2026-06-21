@@ -36,6 +36,12 @@ export default class BjjTimerServer {
     // running timer, the TV returns to the idle clock. Lets an in-progress mat
     // keep its TV alive across an iOS-sleep disconnect without stranding it.
     this.idleSweepAt  = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    // Server-cached stopwatch (relayed from the controller) and the active
+    // display tab, keyed by primary mat. Persisted so a stopwatch survives a
+    // controller's iOS-sleep disconnect and DO hibernation. The stopwatch needs
+    // no server tick — `ts` lets any consumer recompute live elapsed.
+    this.swStates  = { 1: null, 2: null, 3: null, 4: null }; // primary -> { elapsed, running, ts }
+    this.activeTab = { 1: 'timer', 2: 'timer', 3: 'timer', 4: 'timer' }; // primary -> 'timer' | 'stopwatch'
   }
 
   // How long a paused-but-abandoned class keeps its TV before falling back to
@@ -72,12 +78,18 @@ export default class BjjTimerServer {
     // or an abandoned class — reset it so TVs don't get stuck on a flashing 0:00.
     for (let i = 1; i <= 4; i++) {
       const ts = await this.room.storage.get('timerState:' + i);
-      if (!ts) continue;
-      if (ts.running && ts.startedAt && (ts.timeRemainingAtStart - Math.floor((Date.now() - ts.startedAt) / 1000)) <= 0) {
-        await this.room.storage.delete('timerState:' + i);
-      } else {
-        this.timerStates[i] = ts;
+      if (ts) {
+        if (ts.running && ts.startedAt && (ts.timeRemainingAtStart - Math.floor((Date.now() - ts.startedAt) / 1000)) <= 0) {
+          await this.room.storage.delete('timerState:' + i);
+        } else {
+          this.timerStates[i] = ts;
+        }
       }
+      // Recover server-cached stopwatch + active tab (survive DO hibernation).
+      const sw = await this.room.storage.get('stopwatchState:' + i);
+      if (sw) this.swStates[i] = sw;
+      const at = await this.room.storage.get('activeTab:' + i);
+      if (at) this.activeTab[i] = at;
     }
     // Recover any pending idle-clock sweeps (survive DO hibernation).
     const savedSweeps = await this.room.storage.get('idleSweepAt');
@@ -143,26 +155,27 @@ export default class BjjTimerServer {
       }
 
       // Sweep dead controller bindings left by crashes/hibernation. Suppress
-      // the TV-idle signal for any mat whose class is still in progress (e.g. a
-      // coach's phone slept) so the TV keeps showing the live timer.
+      // the TV-idle signal for any mat that's still busy — a timer mid-class OR a
+      // live stopwatch (e.g. a coach's phone slept) — so the TV keeps showing it.
       const liveIds = new Set([...this.room.getConnections('controller')].map(c => c.id));
       for (let i = 1; i <= 4; i++) {
         if (this.ctrlSlots[i] && !liveIds.has(this.ctrlSlots[i])) {
-          this._freeCtrlSlot(i, !this._isClassInProgress(this._primaryForMat(i)));
+          this._freeCtrlSlot(i, !this._isMatBusy(this._primaryForMat(i)));
         }
       }
 
       // Keep only mats that are free or already ours (same device reclaiming,
       // e.g. a phone that slept). Mats run by a different coach can't be grabbed —
-      // and a mat whose class is mid-run (coach away) is locked to its own device.
+      // and a busy mat (timer mid-class or live stopwatch, coach away) is locked
+      // to its own device.
       const bound = [];
       const reclaimOldIds = new Set();
       for (const m of requested) {
         const holder = this.ctrlSlots[m];
         if (!holder) {
           const p = this._primaryForMat(m);
-          if (this._isClassInProgress(p) && this.matClientId[p] && this.matClientId[p] !== clientId) {
-            continue; // class in progress for another device — locked until it ends or that coach returns
+          if (this._isMatBusy(p) && this.matClientId[p] && this.matClientId[p] !== clientId) {
+            continue; // busy for another device — locked until it ends or that coach returns
           }
           bound.push(m); continue;
         }
@@ -197,11 +210,22 @@ export default class BjjTimerServer {
         this.timerStates[primary] = this._newTimerState();
       }
       this.timerStates[primary].mats = bound.slice();
-      // Mirror mats carry no independent timer.
+      // A different coach starts with a clean stopwatch + tab too; a reclaim keeps them.
+      if (!reclaim) {
+        this.swStates[primary] = null;
+        this.activeTab[primary] = 'timer';
+        this.room.storage.delete('stopwatchState:' + primary).catch(() => {});
+        this.room.storage.delete('activeTab:' + primary).catch(() => {});
+      }
+      // Mirror mats carry no independent timer or stopwatch.
       for (const m of bound) {
         if (m === primary) continue;
         this.timerStates[m] = null;
+        this.swStates[m] = null;
+        this.activeTab[m] = 'timer';
         this.room.storage.delete('timerState:' + m).catch(() => {});
+        this.room.storage.delete('stopwatchState:' + m).catch(() => {});
+        this.room.storage.delete('activeTab:' + m).catch(() => {});
       }
 
       // A coach is back on the mat — stand down any pending return-to-clock sweep.
@@ -223,6 +247,8 @@ export default class BjjTimerServer {
         branding:   this.config.branding,
         ctrlSlot:   primary, mats: bound.slice(), ctrlColor, ctrlName: name,
         timerState: this._computeCurrentState(primary),
+        stopwatchState: this._computeCurrentStopwatch(primary),
+        tab: this.activeTab[primary],
       }));
       // Push the coach's color/name + live timer to every TV in the group.
       const cur = this._computeCurrentState(primary);
@@ -247,15 +273,23 @@ export default class BjjTimerServer {
       }
       connection.setState({ role: 'tv', tvSlot: mat });
       this._safeSend(connection, JSON.stringify({ type: 'branding', ...this.config.branding }));
-      // Always reflect the mat's current controlling coach + live timer on connect.
+      // Reflect the mat's controlling coach + live timer/stopwatch on connect. If
+      // the mat is busy but its coach is away (e.g. their phone slept), keep the
+      // coach's name/color so this TV shows the live panel, not the idle clock.
       const ctrl = this.ctrlSlots[mat] ? this.controllers[this.ctrlSlots[mat]] : null;
+      const busyAway = !ctrl && this._isMatBusy(mat) && this.matClientId[this._primaryForMat(mat)];
       this._safeSend(connection, JSON.stringify({
         type:  'ctrl:color',
-        color: ctrl ? (ctrl.color || CTRL_COLORS[mat]) : null,
-        name:  ctrl ? (this.ctrlNames[mat] || null) : null,
+        color: ctrl ? (ctrl.color || CTRL_COLORS[mat]) : (busyAway ? CTRL_COLORS[mat] : null),
+        name:  ctrl ? (this.ctrlNames[mat] || null) : (busyAway ? (this.ctrlNames[mat] || null) : null),
       }));
       const current = this._tvStateForMat(mat);
       if (current) this._safeSend(connection, JSON.stringify({ type: 'state', ...current }));
+      // Seed the stopwatch (live elapsed) and active tab last, so _displayTab is
+      // set and the panel switch runs with the stopwatch already populated.
+      const swSnap = this._computeCurrentStopwatch(mat);
+      if (swSnap) this._safeSend(connection, JSON.stringify({ type: 'sw:state', ...swSnap }));
+      this._safeSend(connection, JSON.stringify({ type: 'tab', tab: this.activeTab[this._primaryForMat(mat)] }));
       this._broadcastMatStatus();
 
     } else {
@@ -274,11 +308,12 @@ export default class BjjTimerServer {
       if (ctrl) {
         const { slot } = ctrl;
         const duration = Math.round((Date.now() - (ctrl.connectedAt || Date.now())) / 1000);
-        // If the class is still in progress (e.g. an iOS phone just slept), keep
-        // the mat's TV showing the live timer instead of flipping it to the idle
-        // clock — the timer keeps ticking server-side and the coach can reclaim
-        // on wake. Arm a safety sweep so an abandoned class eventually goes idle.
-        const inProgress = this._isClassInProgress(slot);
+        // If the mat is still busy (a class in progress OR a live stopwatch, e.g.
+        // an iOS phone just slept), keep the TV showing it instead of flipping to
+        // the idle clock — the timer keeps ticking server-side and the stopwatch
+        // is cached, so the coach can reclaim on wake. Arm a safety sweep so an
+        // abandoned mat eventually goes idle.
+        const inProgress = this._isMatBusy(slot);
         // Free every mat in this controller's group that it still holds (a
         // takeover may have already rebound some). The primary's timerState is
         // intentionally preserved so a sleep/resume reconnect picks it back up.
@@ -330,12 +365,39 @@ export default class BjjTimerServer {
         break;
       }
 
-      // Overlay, tab, and stopwatch messages are still forwarded from the controller
-      case 'overlay':
-      case 'tab':
-      case 'sw:state': {
+      // Overlays are pure passthrough to the group's TVs.
+      case 'overlay': {
         if (!ctrl) return;
         this._sendToTvs(ctrl.slot, JSON.stringify(msg));
+        break;
+      }
+
+      // The active tab is now server-owned so a (re)connecting TV/controller can
+      // be restored to the right panel. Persist, then forward.
+      case 'tab': {
+        if (!ctrl) return;
+        const tab = msg.tab === 'stopwatch' ? 'stopwatch' : 'timer';
+        this.activeTab[ctrl.slot] = tab;
+        this.room.storage.put('activeTab:' + ctrl.slot, tab).catch(() => {});
+        this._sendToTvs(ctrl.slot, JSON.stringify(msg));
+        break;
+      }
+
+      // The stopwatch is computed on the controller but cached + persisted here so
+      // it survives the controller's iOS-sleep disconnect and DO hibernation. `ts`
+      // lets any later consumer recompute live elapsed; no server tick needed.
+      case 'sw:state': {
+        if (!ctrl) return;
+        const prev = this.swStates[ctrl.slot];
+        const sw = { elapsed: msg.elapsed || 0, running: !!msg.running, ts: msg.ts || Date.now() };
+        this.swStates[ctrl.slot] = sw;
+        this.room.storage.put('stopwatchState:' + ctrl.slot, sw).catch(() => {});
+        this._sendToTvs(ctrl.slot, JSON.stringify(msg));
+        // Refresh mat occupancy only when the stopwatch crosses a busy boundary
+        // (started/stopped, or first non-zero / back to zero) — not every tick.
+        const wasBusy = !!(prev && (prev.running || prev.elapsed > 0));
+        const nowBusy = sw.running || sw.elapsed > 0;
+        if (wasBusy !== nowBusy) this._broadcastMatStatus();
         break;
       }
 
@@ -610,6 +672,27 @@ export default class BjjTimerServer {
     return !!(cur.running || cur.timeRemaining < cur.roundDuration || cur.currentRound > 1 || cur.phase === 'rest');
   }
 
+  // Live stopwatch snapshot for a mat (resolves mirror → primary), with elapsed
+  // re-anchored to now so any late consumer gets the correct running value.
+  _computeCurrentStopwatch(mat) {
+    const sw = this.swStates[this._primaryForMat(mat)];
+    if (!sw) return null;
+    return {
+      running: sw.running,
+      elapsed: sw.elapsed + (sw.running ? Date.now() - sw.ts : 0),
+      ts:      Date.now(),
+    };
+  }
+
+  // "Busy" = keep the mat alive / locked / shown on the TV. True for a class in
+  // progress (timer) OR a meaningful stopwatch (running, or stopped at non-zero
+  // elapsed). A reset stopwatch (elapsed 0, not running) is NOT busy.
+  _isMatBusy(mat) {
+    if (this._isClassInProgress(mat)) return true;
+    const sw = this._computeCurrentStopwatch(mat);
+    return !!(sw && (sw.running || sw.elapsed > 0));
+  }
+
   _hasPendingSweep() {
     for (let i = 1; i <= 4; i++) { if (this.idleSweepAt[i]) return true; }
     return false;
@@ -655,9 +738,10 @@ export default class BjjTimerServer {
       const ctrl = this.ctrlSlots[i] ? this.controllers[this.ctrlSlots[i]] : null;
       if (ctrl) {
         mats[i] = { occupied: true, name: this.ctrlNames[i] || 'Coach', color: ctrl.color || CTRL_COLORS[i] };
-      } else if (this._isClassInProgress(i) && this.matClientId[this._primaryForMat(i)]) {
-        // No live controller, but the class is mid-run with its coach away (e.g.
-        // phone asleep). Keep the mat locked so another coach can't seize it.
+      } else if (this._isMatBusy(i) && this.matClientId[this._primaryForMat(i)]) {
+        // No live controller, but the mat is still busy (timer mid-run or a live
+        // stopwatch) with its coach away (e.g. phone asleep). Keep it locked so
+        // another coach can't seize it.
         mats[i] = { occupied: true, inProgress: true, name: this.ctrlNames[i] || 'Coach', color: CTRL_COLORS[i] };
       } else {
         mats[i] = { occupied: false };
@@ -720,12 +804,17 @@ export default class BjjTimerServer {
       if (this.ctrlSlots[p]) { this.idleSweepAt[p] = 0; changed = true; continue; } // reclaimed
       if (this.timerStates[p]?.running) continue;                                    // still ticking — wait
       if (now < due) continue;
-      // Finalize: tell the group's TVs the mat is idle and fully release it.
+      // Finalize: tell the group's TVs the mat is idle and fully release it
+      // (timer, stopwatch, and active tab).
       const ts = this.timerStates[p];
       const mats = (ts && ts.mats) ? ts.mats : [p];
       for (const m of mats) {
         this.ctrlNames[m] = '';
         this.matClientId[m] = null;
+        this.swStates[m] = null;
+        this.activeTab[m] = 'timer';
+        this.room.storage.delete('stopwatchState:' + m).catch(() => {});
+        this.room.storage.delete('activeTab:' + m).catch(() => {});
         this._sendToTv(m, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
       }
       this.timerStates[p] = null;
