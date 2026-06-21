@@ -1567,6 +1567,8 @@ function _onClose(ev) {
 }
 
 let dispSwRaf = null;
+let dispSwShown = 0;        // last stopwatch ms rendered on the TV
+let dispSwRunning = false;  // is the TV stopwatch currently counting up?
 
 function _onMessage(event) {
   let msg;
@@ -1671,17 +1673,23 @@ function _onMessage(event) {
 
     case 'sw:state': {
       if (mode !== 'display') break;
-      cancelAnimationFrame(dispSwRaf);
       const latency = Date.now() - msg.ts;
       // Seed from the authoritative elapsed, then count via a real-time anchor
       // (performance.now delta) rather than +16/frame. This stays wall-clock
       // accurate between the 1 Hz frames AND through a multi-minute controller
       // sleep where no further frames arrive; each new sw:state re-seeds.
       const seed   = msg.elapsed + (msg.running ? latency : 0);
+      // Ignore a stale/out-of-order running frame that would snap the clock
+      // backwards (running elapsed never legitimately decreases). Leave the
+      // current rAF loop counting so the display stays smooth.
+      if (msg.running && dispSwRunning && seed < dispSwShown - 750) break;
+      cancelAnimationFrame(dispSwRaf);
+      dispSwRunning = msg.running;
       const anchor = performance.now();
       const swEl   = document.getElementById('displaySwTime');
       function dispSwTick() {
         const disp = msg.running ? seed + (performance.now() - anchor) : seed;
+        dispSwShown = disp;
         if (swEl) swEl.innerHTML = (() => {
           const mins = Math.floor(disp/60000), secs = Math.floor((disp%60000)/1000), cs = Math.floor((disp%1000)/10);
           return `${mins}:${String(secs).padStart(2,'0')}<span style="font-size:.4em;opacity:.55">.${String(cs).padStart(2,'0')}</span>`;
@@ -2038,8 +2046,17 @@ function switchTab(tab) {
 }
 
 // ─── STOPWATCH ────────────────────────────────────────────────────
+// Wall-clock model: while running, live elapsed = Date.now() - swStartTime;
+// while paused, swElapsed holds the frozen value. The broadcast value is always
+// derived from the wall clock (not a per-frame accumulator), so a backgrounded
+// phone whose rAF is frozen still reports the correct, advancing elapsed instead
+// of a stale value that would make the TV jitter back and forth.
 let swRunning = false, swElapsed = 0, swStartTime = null, swRafId = null;
 let swBroadcastTimer = null;
+
+function swCurrentElapsed() {
+  return swRunning && swStartTime != null ? Date.now() - swStartTime : swElapsed;
+}
 
 function swFormatDisplay(ms) {
   const mins = Math.floor(ms/60000);
@@ -2049,24 +2066,25 @@ function swFormatDisplay(ms) {
 }
 
 function swBroadcast() {
-  emit('sw:state', { elapsed: swElapsed, running: swRunning, ts: Date.now() });
+  emit('sw:state', { elapsed: swCurrentElapsed(), running: swRunning, ts: Date.now() });
 }
 
 function swTick() {
   if (!swRunning) return;
-  swElapsed += Date.now() - swStartTime; swStartTime = Date.now();
-  document.getElementById('swDisplay').innerHTML = swFormatDisplay(swElapsed);
+  // rAF is purely for smooth on-screen rendering now — correctness is wall-clock based.
+  document.getElementById('swDisplay').innerHTML = swFormatDisplay(swCurrentElapsed());
   swRafId = requestAnimationFrame(swTick);
 }
 
 function swToggle() {
   if (swRunning) {
-    swRunning = false; cancelAnimationFrame(swRafId);
+    swElapsed = Date.now() - swStartTime; swStartTime = null; swRunning = false;
+    cancelAnimationFrame(swRafId);
     clearInterval(swBroadcastTimer);
     document.getElementById('swStartPauseBtn').textContent = '▶ Resume';
     document.getElementById('swStartPauseBtn').className = 'btn btn-green btn-massive';
   } else {
-    swRunning = true; swStartTime = Date.now(); getAudioCtx();
+    swStartTime = Date.now() - swElapsed; swRunning = true; getAudioCtx();
     document.getElementById('swStartPauseBtn').textContent = '⏸ Pause';
     document.getElementById('swStartPauseBtn').className = 'btn btn-red btn-massive';
     swRafId = requestAnimationFrame(swTick);
@@ -2092,17 +2110,19 @@ function swReset() {
 function swAdoptSnapshot(snap) {
   cancelAnimationFrame(swRafId);
   clearInterval(swBroadcastTimer);
-  swElapsed = (snap.elapsed || 0) + (snap.running ? Date.now() - snap.ts : 0);
+  const live = (snap.elapsed || 0) + (snap.running ? Date.now() - snap.ts : 0);
+  swElapsed = live;
   swRunning = !!snap.running;
-  document.getElementById('swDisplay').innerHTML = swFormatDisplay(swElapsed);
+  document.getElementById('swDisplay').innerHTML = swFormatDisplay(live);
   const btn = document.getElementById('swStartPauseBtn');
   if (swRunning) {
-    swStartTime = Date.now();
+    swStartTime = Date.now() - live;
     btn.textContent = '⏸ Pause'; btn.className = 'btn btn-red btn-massive';
     swRafId = requestAnimationFrame(swTick);
     swBroadcastTimer = setInterval(swBroadcast, 1000);
   } else {
-    btn.textContent = swElapsed > 0 ? '▶ Resume' : '▶ Start';
+    swStartTime = null;
+    btn.textContent = live > 0 ? '▶ Resume' : '▶ Start';
     btn.className = 'btn btn-green btn-massive';
   }
 }
