@@ -1711,8 +1711,8 @@ function _onMessage(event) {
         const disp = msg.running ? seed + (performance.now() - anchor) : seed;
         dispSwShown = disp;
         if (swEl) swEl.innerHTML = (() => {
-          const mins = Math.floor(disp/60000), secs = Math.floor((disp%60000)/1000), cs = Math.floor((disp%1000)/10);
-          return `${mins}:${String(secs).padStart(2,'0')}<span style="font-size:.4em;opacity:.55">.${String(cs).padStart(2,'0')}</span>`;
+          const mins = Math.floor(disp/60000), secs = Math.floor((disp%60000)/1000);
+          return `${mins}:${String(secs).padStart(2,'0')}`;
         })();
         if (msg.running) dispSwRaf = requestAnimationFrame(dispSwTick);
       }
@@ -2081,8 +2081,7 @@ function swCurrentElapsed() {
 function swFormatDisplay(ms) {
   const mins = Math.floor(ms/60000);
   const secs = Math.floor((ms%60000)/1000);
-  const cs   = Math.floor((ms%1000)/10);
-  return `${mins}:${String(secs).padStart(2,'0')}<span style="font-size:.4em;opacity:.55">.${String(cs).padStart(2,'0')}</span>`;
+  return `${mins}:${String(secs).padStart(2,'0')}`;
 }
 
 function swBroadcast() {
