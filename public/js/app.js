@@ -1150,7 +1150,9 @@ function renderMatGrid() {
     const m = _matStatus[n] || {};
     const inUse = m.occupied;
     const picked = _selectedMats.includes(n);
-    const sub = inUse ? `In use — ${escHtml(m.name || 'Coach')}` : (picked ? 'Selected' : 'Tap to select');
+    const sub = inUse
+      ? (m.inProgress ? `In progress — ${escHtml(m.name || 'Coach')} away` : `In use — ${escHtml(m.name || 'Coach')}`)
+      : (picked ? 'Selected' : 'Tap to select');
     const accent = m.color || getSlotColor(n);
     const cls = 'mat-card' + (inUse ? ' mat-in-use' : '') + (picked ? ' mat-picked' : '');
     return `<button class="${cls}" onclick="toggleMat(${n})" ${inUse ? 'disabled' : ''} style="border-left-color:${accent}">

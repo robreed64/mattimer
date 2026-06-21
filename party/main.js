@@ -32,7 +32,17 @@ export default class BjjTimerServer {
     this.matClientId  = { 1: null, 2: null, 3: null, 4: null }; // mat -> clientId that last held it (for reclaim detection)
     this.config = null;
     this.timerStates  = { 1: null, 2: null, 3: null, 4: null }; // mat -> server-owned timer
+    // primary mat -> timestamp (ms) after which, with no controller and no
+    // running timer, the TV returns to the idle clock. Lets an in-progress mat
+    // keep its TV alive across an iOS-sleep disconnect without stranding it.
+    this.idleSweepAt  = { 1: 0, 2: 0, 3: 0, 4: 0 };
   }
+
+  // How long a paused-but-abandoned class keeps its TV before falling back to
+  // the idle clock, and the short grace after a running timer ends so the TV
+  // can show "TIME!" before going idle.
+  static get IDLE_GRACE_MS()    { return 5 * 60 * 1000; }
+  static get END_IDLE_DELAY_MS(){ return 5 * 1000; }
 
   async onStart() {
     this.config = await this.room.storage.get('config');
@@ -69,8 +79,12 @@ export default class BjjTimerServer {
         this.timerStates[i] = ts;
       }
     }
-    // Ensure alarm is running for any timers recovered from storage
-    if (this._hasAnyRunning()) await this._scheduleAlarm();
+    // Recover any pending idle-clock sweeps (survive DO hibernation).
+    const savedSweeps = await this.room.storage.get('idleSweepAt');
+    if (savedSweeps) for (let i = 1; i <= 4; i++) this.idleSweepAt[i] = savedSweeps[i] || 0;
+    // Ensure alarm is running for any timers recovered from storage, or to
+    // process a pending idle sweep after a hibernation.
+    if (this._hasAnyRunning() || this._hasPendingSweep()) await this._scheduleAlarm();
   }
 
   getConnectionTags(connection, ctx) {
@@ -128,19 +142,30 @@ export default class BjjTimerServer {
         return;
       }
 
-      // Sweep dead controller bindings left by crashes/hibernation.
+      // Sweep dead controller bindings left by crashes/hibernation. Suppress
+      // the TV-idle signal for any mat whose class is still in progress (e.g. a
+      // coach's phone slept) so the TV keeps showing the live timer.
       const liveIds = new Set([...this.room.getConnections('controller')].map(c => c.id));
       for (let i = 1; i <= 4; i++) {
-        if (this.ctrlSlots[i] && !liveIds.has(this.ctrlSlots[i])) this._freeCtrlSlot(i);
+        if (this.ctrlSlots[i] && !liveIds.has(this.ctrlSlots[i])) {
+          this._freeCtrlSlot(i, !this._isClassInProgress(this._primaryForMat(i)));
+        }
       }
 
       // Keep only mats that are free or already ours (same device reclaiming,
-      // e.g. a phone that slept). Mats run by a different coach can't be grabbed.
+      // e.g. a phone that slept). Mats run by a different coach can't be grabbed —
+      // and a mat whose class is mid-run (coach away) is locked to its own device.
       const bound = [];
       const reclaimOldIds = new Set();
       for (const m of requested) {
         const holder = this.ctrlSlots[m];
-        if (!holder) { bound.push(m); continue; }
+        if (!holder) {
+          const p = this._primaryForMat(m);
+          if (this._isClassInProgress(p) && this.matClientId[p] && this.matClientId[p] !== clientId) {
+            continue; // class in progress for another device — locked until it ends or that coach returns
+          }
+          bound.push(m); continue;
+        }
         const holderCtrl = this.controllers[holder];
         if (holderCtrl && clientId && holderCtrl.clientId === clientId) {
           bound.push(m);
@@ -155,10 +180,12 @@ export default class BjjTimerServer {
       }
 
       // Close our own prior connection(s) being reclaimed and free their mats.
+      // Don't notify the TV (a fresh ctrl:color + state is sent below) so the
+      // reclaim doesn't flash the idle clock between the two messages.
       for (const oldId of reclaimOldIds) {
         const old = [...this.room.getConnections('controller')].find(c => c.id === oldId);
         if (old) { try { old.close(); } catch {} }
-        for (let i = 1; i <= 4; i++) if (this.ctrlSlots[i] === oldId) this._freeCtrlSlot(i);
+        for (let i = 1; i <= 4; i++) if (this.ctrlSlots[i] === oldId) this._freeCtrlSlot(i, false);
       }
 
       const primary = bound[0]; // lowest mat holds the single shared timer
@@ -176,6 +203,9 @@ export default class BjjTimerServer {
         this.timerStates[m] = null;
         this.room.storage.delete('timerState:' + m).catch(() => {});
       }
+
+      // A coach is back on the mat — stand down any pending return-to-clock sweep.
+      this._clearIdleSweep(primary);
 
       const ctrlColor = color || CTRL_COLORS[primary];
       this.controllers[connection.id] = { slot: primary, mats: bound.slice(), color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };
@@ -244,12 +274,20 @@ export default class BjjTimerServer {
       if (ctrl) {
         const { slot } = ctrl;
         const duration = Math.round((Date.now() - (ctrl.connectedAt || Date.now())) / 1000);
+        // If the class is still in progress (e.g. an iOS phone just slept), keep
+        // the mat's TV showing the live timer instead of flipping it to the idle
+        // clock — the timer keeps ticking server-side and the coach can reclaim
+        // on wake. Arm a safety sweep so an abandoned class eventually goes idle.
+        const inProgress = this._isClassInProgress(slot);
         // Free every mat in this controller's group that it still holds (a
         // takeover may have already rebound some). The primary's timerState is
         // intentionally preserved so a sleep/resume reconnect picks it back up.
         for (const m of (ctrl.mats || [slot])) {
-          if (this.ctrlSlots[m] === connection.id) this._freeCtrlSlot(m);
+          if (this.ctrlSlots[m] === connection.id) this._freeCtrlSlot(m, !inProgress);
         }
+        // Arm the return-to-clock sweep only if this disconnect actually left the
+        // primary unheld (a same-device reclaim may have already rebound it).
+        if (inProgress && !this.ctrlSlots[slot]) this._scheduleIdleSweep(slot, BjjTimerServer.IDLE_GRACE_MS);
         // Platform-admin visits aren't real classes — keep them out of Recent activity
         if (duration > 30 && ctrl.userRole !== 'admin') {
           (async () => {
@@ -546,15 +584,48 @@ export default class BjjTimerServer {
   // ─── Private helpers ──────────────────────────────────────────────
 
   // Release a mat's controller binding. Timer state is intentionally left
-  // intact so a reconnecting/next coach picks up where it left off; the mat's
-  // TV is told the mat is now uncontrolled.
-  _freeCtrlSlot(slot) {
+  // intact so a reconnecting/next coach picks up where it left off. When
+  // notifyTv is true the mat's TV is told it's now uncontrolled (→ idle clock);
+  // when false (the class is still in progress) the TV keeps showing the live
+  // timer and the coach name is preserved so the mat picker can show "coach away".
+  _freeCtrlSlot(slot, notifyTv = true) {
     const occupantId = this.ctrlSlots[slot];
     if (!occupantId) return;
     delete this.controllers[occupantId];
     this.ctrlSlots[slot] = null;
-    this.ctrlNames[slot] = '';
-    this._sendToTv(slot, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
+    if (notifyTv) {
+      this.ctrlNames[slot] = '';
+      this._sendToTv(slot, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
+    }
+  }
+
+  // A class is "in progress" (not a fresh/idle round) when its timer is running
+  // or it's been advanced/paused mid-class. A freshly configured but unstarted
+  // round is NOT in progress. `mat` may be a mirror mat — resolves to its primary.
+  _isClassInProgress(mat) {
+    const primary = this._primaryForMat(mat);
+    const ts = this.timerStates[primary];
+    if (!ts) return false;
+    const cur = this._computeCurrentState(primary) || ts;
+    return !!(cur.running || cur.timeRemaining < cur.roundDuration || cur.currentRound > 1 || cur.phase === 'rest');
+  }
+
+  _hasPendingSweep() {
+    for (let i = 1; i <= 4; i++) { if (this.idleSweepAt[i]) return true; }
+    return false;
+  }
+
+  // Arm the return-to-clock timer for a primary mat and make sure the alarm runs.
+  _scheduleIdleSweep(primary, delayMs) {
+    this.idleSweepAt[primary] = Date.now() + delayMs;
+    this.room.storage.put('idleSweepAt', { ...this.idleSweepAt }).catch(() => {});
+    this._scheduleAlarm();
+  }
+
+  _clearIdleSweep(primary) {
+    if (!this.idleSweepAt[primary]) return;
+    this.idleSweepAt[primary] = 0;
+    this.room.storage.put('idleSweepAt', { ...this.idleSweepAt }).catch(() => {});
   }
 
   // Sending to a connection that just closed (stale/flapping TV, a phone that
@@ -582,9 +653,15 @@ export default class BjjTimerServer {
     const mats = {};
     for (let i = 1; i <= 4; i++) {
       const ctrl = this.ctrlSlots[i] ? this.controllers[this.ctrlSlots[i]] : null;
-      mats[i] = ctrl
-        ? { occupied: true, name: this.ctrlNames[i] || 'Coach', color: ctrl.color || CTRL_COLORS[i] }
-        : { occupied: false };
+      if (ctrl) {
+        mats[i] = { occupied: true, name: this.ctrlNames[i] || 'Coach', color: ctrl.color || CTRL_COLORS[i] };
+      } else if (this._isClassInProgress(i) && this.matClientId[this._primaryForMat(i)]) {
+        // No live controller, but the class is mid-run with its coach away (e.g.
+        // phone asleep). Keep the mat locked so another coach can't seize it.
+        mats[i] = { occupied: true, inProgress: true, name: this.ctrlNames[i] || 'Coach', color: CTRL_COLORS[i] };
+      } else {
+        mats[i] = { occupied: false };
+      }
     }
     return mats;
   }
@@ -623,11 +700,41 @@ export default class BjjTimerServer {
         this._broadcastTimerState(slot);
       }
     }
-    // Keep ticking while any mat is running. setAlarm replaces any existing
-    // alarm, so this is safe to call unconditionally.
-    if (this._hasAnyRunning()) {
+    this._runIdleSweeps(now);
+    // Keep ticking while any mat is running, or while an idle sweep is pending
+    // (so an abandoned/ended class still returns its TV to the clock). setAlarm
+    // replaces any existing alarm, so this is safe to call unconditionally.
+    if (this._hasAnyRunning() || this._hasPendingSweep()) {
       await this.room.storage.setAlarm(Date.now() + 1000);
     }
+  }
+
+  // Return TVs to the idle clock for mats whose class has been abandoned (coach
+  // gone) or has ended, once the grace period elapses. A live controller or a
+  // still-running timer cancels/defers the sweep.
+  _runIdleSweeps(now) {
+    let changed = false;
+    for (let p = 1; p <= 4; p++) {
+      const due = this.idleSweepAt[p];
+      if (!due) continue;
+      if (this.ctrlSlots[p]) { this.idleSweepAt[p] = 0; changed = true; continue; } // reclaimed
+      if (this.timerStates[p]?.running) continue;                                    // still ticking — wait
+      if (now < due) continue;
+      // Finalize: tell the group's TVs the mat is idle and fully release it.
+      const ts = this.timerStates[p];
+      const mats = (ts && ts.mats) ? ts.mats : [p];
+      for (const m of mats) {
+        this.ctrlNames[m] = '';
+        this.matClientId[m] = null;
+        this._sendToTv(m, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
+      }
+      this.timerStates[p] = null;
+      this.room.storage.delete('timerState:' + p).catch(() => {});
+      this.idleSweepAt[p] = 0;
+      changed = true;
+      this._broadcastMatStatus();
+    }
+    if (changed) this.room.storage.put('idleSweepAt', { ...this.idleSweepAt }).catch(() => {});
   }
 
   _hasAnyRunning() {
@@ -700,6 +807,9 @@ export default class BjjTimerServer {
         this._sendToTvs(slot, JSON.stringify({ type: 'overlay', msg: 'TIME!' }));
         this._broadcastTimerState(slot);
         await this.room.storage.delete('timerState:' + slot);
+        // If the coach already left (e.g. phone asleep), let the TV show "TIME!"
+        // briefly, then return it to the idle clock via the sweep.
+        if (!this.ctrlSlots[slot]) this._scheduleIdleSweep(slot, BjjTimerServer.END_IDLE_DELAY_MS);
       } else if (ts.restDuration > 0) {
         ts.phase = 'rest'; ts.timeRemaining = ts.restDuration;
         ts.startedAt = Date.now(); ts.timeRemainingAtStart = ts.restDuration;
