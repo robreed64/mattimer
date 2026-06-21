@@ -141,6 +141,9 @@ export default class BjjTimerServer {
       const profileId = url.searchParams.get('profileId') || null;
       const clientId  = url.searchParams.get('clientId')  || null;
       const authSub   = auth?.sub || null;
+      // A deliberate takeover (the coach confirmed in the picker) bypasses the
+      // busy-mat lock and seizes the mat from whoever holds it.
+      const takeover  = url.searchParams.get('takeover') === '1';
 
       // The coach chose one or more mats (1-4) to run together as one timer.
       // Accept `mats` (comma list) with a fallback to legacy single `mat`.
@@ -160,21 +163,27 @@ export default class BjjTimerServer {
       const liveIds = new Set([...this.room.getConnections('controller')].map(c => c.id));
       for (let i = 1; i <= 4; i++) {
         if (this.ctrlSlots[i] && !liveIds.has(this.ctrlSlots[i])) {
-          this._freeCtrlSlot(i, !this._isMatBusy(this._primaryForMat(i)));
+          const p = this._primaryForMat(i);
+          const busy = this._isMatBusy(p);
+          this._freeCtrlSlot(i, !busy);
+          // An unclean drop (no onClose) wouldn't have armed the return-to-idle
+          // sweep — arm it here so a busy mat can't stay locked/occupied forever.
+          if (busy && !this.idleSweepAt[p]) this._scheduleIdleSweep(p, BjjTimerServer.IDLE_GRACE_MS);
         }
       }
 
       // Keep only mats that are free or already ours (same device reclaiming,
-      // e.g. a phone that slept). Mats run by a different coach can't be grabbed —
-      // and a busy mat (timer mid-class or live stopwatch, coach away) is locked
-      // to its own device.
+      // e.g. a phone that slept). A busy mat (timer mid-class or live stopwatch)
+      // run by a different device is locked — unless this is a deliberate
+      // takeover, which seizes it (and bounces a live holder to the picker).
       const bound = [];
       const reclaimOldIds = new Set();
+      const replaceIds = new Set();
       for (const m of requested) {
         const holder = this.ctrlSlots[m];
         if (!holder) {
           const p = this._primaryForMat(m);
-          if (this._isMatBusy(p) && this.matClientId[p] && this.matClientId[p] !== clientId) {
+          if (!takeover && this._isMatBusy(p) && this.matClientId[p] && this.matClientId[p] !== clientId) {
             continue; // busy for another device — locked until it ends or that coach returns
           }
           bound.push(m); continue;
@@ -183,6 +192,10 @@ export default class BjjTimerServer {
         if (holderCtrl && clientId && holderCtrl.clientId === clientId) {
           bound.push(m);
           if (holder !== connection.id) reclaimOldIds.add(holder);
+        } else if (takeover) {
+          // Seize a different coach's live mat — they get kicked below.
+          bound.push(m);
+          replaceIds.add(holder);
         }
         // otherwise in use by someone else — silently skip it
       }
@@ -198,6 +211,16 @@ export default class BjjTimerServer {
       for (const oldId of reclaimOldIds) {
         const old = [...this.room.getConnections('controller')].find(c => c.id === oldId);
         if (old) { try { old.close(); } catch {} }
+        for (let i = 1; i <= 4; i++) if (this.ctrlSlots[i] === oldId) this._freeCtrlSlot(i, false);
+      }
+      // Kick the coach(es) being taken over: tell them they were replaced (the
+      // client bounces them back to the mat picker), then free their mats.
+      for (const oldId of replaceIds) {
+        const old = [...this.room.getConnections('controller')].find(c => c.id === oldId);
+        if (old) {
+          try { old.send(JSON.stringify({ type: 'replaced' })); } catch {}
+          try { old.close(); } catch {}
+        }
         for (let i = 1; i <= 4; i++) if (this.ctrlSlots[i] === oldId) this._freeCtrlSlot(i, false);
       }
 

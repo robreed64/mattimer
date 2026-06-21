@@ -1154,11 +1154,13 @@ function promptControllerPassword() {
 // ─── MAT PICKER (multi-select: run several mats as one timer) ─────
 let _selectedMats = [];   // mats chosen for this session, lowest = primary
 let _matStatus = {};      // last-known occupancy from the server
+let _takeoverMats = new Set(); // in-use mats the coach confirmed taking over
 
 function openMatPicker() {
   const modal = document.getElementById('matPickerModal');
   if (!modal) return;
   _selectedMats = [];
+  _takeoverMats = new Set();
   _matStatus = {};
   renderMatGrid();
   modal.style.display = 'flex';
@@ -1178,12 +1180,13 @@ function renderMatGrid() {
     const m = _matStatus[n] || {};
     const inUse = m.occupied;
     const picked = _selectedMats.includes(n);
-    const sub = inUse
-      ? (m.inProgress ? `In progress — ${escHtml(m.name || 'Coach')} away` : `In use — ${escHtml(m.name || 'Coach')}`)
-      : (picked ? 'Selected' : 'Tap to select');
+    let sub;
+    if (picked && _takeoverMats.has(n)) sub = 'Taking over';
+    else if (inUse) sub = (m.inProgress ? `In progress — ${escHtml(m.name || 'Coach')} away` : `In use — ${escHtml(m.name || 'Coach')}`) + ' · tap to take over';
+    else sub = picked ? 'Selected' : 'Tap to select';
     const accent = m.color || getSlotColor(n);
     const cls = 'mat-card' + (inUse ? ' mat-in-use' : '') + (picked ? ' mat-picked' : '');
-    return `<button class="${cls}" onclick="toggleMat(${n})" ${inUse ? 'disabled' : ''} style="border-left-color:${accent}">
+    return `<button class="${cls}" onclick="toggleMat(${n})" style="border-left-color:${accent}">
       <span class="mat-card-num">Mat ${n}</span>
       <span class="mat-card-status">${sub}</span>
     </button>`;
@@ -1197,9 +1200,22 @@ function renderMatGrid() {
 }
 
 function toggleMat(n) {
-  if (_matStatus[n]?.occupied) return; // can't grab an in-use mat
   const i = _selectedMats.indexOf(n);
-  if (i === -1) _selectedMats.push(n); else _selectedMats.splice(i, 1);
+  if (i === -1) {
+    const m = _matStatus[n];
+    if (m?.occupied) {
+      // Deliberate takeover of an in-use mat — confirm, since it resets the
+      // current coach's timer and bounces them if they're still connected.
+      const who = m.name || 'another coach';
+      const label = m.inProgress ? `${who} (away)` : who;
+      if (!confirm(`Mat ${n} is in use by ${label}. Take it over? This resets their timer.`)) return;
+      _takeoverMats.add(n);
+    }
+    _selectedMats.push(n);
+  } else {
+    _selectedMats.splice(i, 1);
+    _takeoverMats.delete(n);
+  }
   _selectedMats.sort((a, b) => a - b);
   renderMatGrid();
 }
@@ -1489,6 +1505,7 @@ function _controllerSocketParams() {
     color:     _pendingProfile?.color || '',
     profileId: _pendingProfile?.id    || '',
     clientId:  _getCtrlDeviceId(),
+    takeover:  (mats || []).some(m => _takeoverMats.has(+m)) ? '1' : '',
   };
 }
 
@@ -1607,6 +1624,9 @@ function _onMessage(event) {
         if (msg.tab) _applyTabUI(msg.tab === 'stopwatch' ? 'stopwatch' : 'timer');
       }
       _freshLogin = false;
+      // We now own these mats — drop any takeover intent so a later sleep/resume
+      // reconnect (which reuses these params) never re-kicks anyone.
+      _takeoverMats = new Set();
       break;
     }
 
