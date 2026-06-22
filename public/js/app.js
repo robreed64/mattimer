@@ -1859,10 +1859,12 @@ function _updateStartPauseBtn() {
   }
 }
 
-function startTimer() {
+function startTimer(silent = false) {
   getAudioCtx();
-  const playedCustom = playCustomAudio('start');
-  if (!playedCustom) SOUND_THEMES[soundTheme].startSound();
+  if (!silent) {
+    const playedCustom = playCustomAudio('start');
+    if (!playedCustom) SOUND_THEMES[soundTheme].startSound();
+  }
   emit('timer:start');
   // Optimistic UI — server state will confirm within one tick
   state.running = true;
@@ -2061,6 +2063,18 @@ function _applyTabUI(tab) {
   document.getElementById('panelStopwatch').classList.toggle('hidden', tab !== 'stopwatch');
 }
 function switchTab(tab) {
+  // Seamless handoff: when leaving a *running* clock, pause it and resume the
+  // one we switch to (silently) so exactly one clock runs across the switch.
+  const from = activeTab;
+  if (from !== tab) {
+    if (from === 'timer' && tab === 'stopwatch' && state.running) {
+      pauseTimer();
+      if (!swRunning) swToggle();
+    } else if (from === 'stopwatch' && tab === 'timer' && swRunning) {
+      swToggle();
+      if (!state.running && state.timeRemaining > 0) startTimer(true);
+    }
+  }
   _applyTabUI(tab);
   emit('tab', { tab });
 }
