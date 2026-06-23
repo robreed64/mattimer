@@ -30,7 +30,7 @@ function _isDemoRoom() { return roomId?.toLowerCase() === 'demo'; }
 const DEVICE_STORAGE_KEY = 'mattimer_device';
 // Coach/kiosk login (gym username+password): a long-lived kiosk-auth token stored
 // here lets a shared gym device re-mint room tokens without re-entering the
-// password. See api/gym-login.js / api/kiosk-token.js.
+// password. See api/coach-auth.js (action: login/refresh).
 const KIOSK_STORAGE_KEY = 'mattimer_kiosk';
 
 function _loadDeviceRecord() {
@@ -59,10 +59,10 @@ function _saveKioskRecord(rec) {
 // (e.g. the owner turned off coach login, or the subscription lapsed).
 async function _mintKioskRoomToken(kiosk) {
   try {
-    const res = await fetch('/api/kiosk-token', {
+    const res = await fetch('/api/coach-auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roomId, kioskToken: kiosk.kioskToken }),
+      body: JSON.stringify({ action: 'refresh', roomId, kioskToken: kiosk.kioskToken }),
     });
     if (!res.ok) { localStorage.removeItem(KIOSK_STORAGE_KEY); return null; }
     const { roomToken, roomTokenExp } = await res.json();
@@ -193,10 +193,10 @@ async function gymLogin() {
     return;
   }
   try {
-    const res = await fetch('/api/gym-login', {
+    const res = await fetch('/api/coach-auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ action: 'login', username, password }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -463,7 +463,11 @@ async function _refreshKioskUsername() {
   label.textContent = 'Loading…';
   try {
     const { data: { session } } = await _supabase.auth.getSession();
-    const res = await fetch('/api/gym-credentials', { headers: { 'Authorization': 'Bearer ' + session.access_token } });
+    const res = await fetch('/api/coach-auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ action: 'credentials-get' }),
+    });
     const data = await res.json().catch(() => ({}));
     const u = res.ok ? data.username : null;
     label.textContent = u ? ('Current username: ' + u) : 'Not set up yet';
@@ -479,10 +483,10 @@ async function saveKioskCredentials() {
   if (!username || !password) { show('Enter a username and password.', 'var(--mat-red)'); return; }
   try {
     const { data: { session } } = await _supabase.auth.getSession();
-    const res = await fetch('/api/gym-credentials', {
+    const res = await fetch('/api/coach-auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ action: 'credentials-set', username, password }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { show(data.error || 'Could not save coach login.', 'var(--mat-red)'); return; }
@@ -498,10 +502,10 @@ async function disableKioskLogin() {
   const msg = document.getElementById('kioskCredMsg');
   try {
     const { data: { session } } = await _supabase.auth.getSession();
-    const res = await fetch('/api/gym-credentials', {
+    const res = await fetch('/api/coach-auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ clear: true }),
+      body: JSON.stringify({ action: 'credentials-clear' }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { msg.style.display = 'block'; msg.style.color = 'var(--mat-red)'; msg.textContent = data.error || 'Could not disable.'; return; }
