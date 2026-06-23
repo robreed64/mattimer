@@ -110,8 +110,8 @@ Browser-safe config lives in `public/supabase-config.js` (publishable key) and `
 
 - `gym_devices` — a phone that redeemed a pairing code. Holds no secrets;
   the device-auth token it's issued is a self-verifying HMAC (same scheme
-  as room tokens, see `lib/room-token.js`). This table exists purely so an
-  owner can see/revoke paired devices from the Coaches modal:
+  as room tokens, see `lib/room-token.js`). The table records paired devices
+  (and their `revoked_at` flag, honored by `api/device-token.js`):
 
   ```sql
   create table gym_devices (
