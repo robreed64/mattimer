@@ -17,7 +17,7 @@
 <script src="/partykit-config.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="/css/main.css?v=26">
+<link rel="stylesheet" href="/css/main.css?v=27">
 </head>
 <body>
 
@@ -85,8 +85,44 @@
     <div style="text-align:center;margin-top:.9rem">
       <button type="button" onclick="forgotPassword()" style="background:none;border:none;color:var(--mat-muted);font-family:var(--font-ui);font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0">Forgot password?</button>
     </div>
+    <div style="text-align:center;margin-top:.9rem;border-top:1px solid var(--mat-border);padding-top:.9rem">
+      <button type="button" onclick="showCoachLogin()" style="background:none;border:none;color:var(--mat-gold);font-family:var(--font-ui);font-size:.82rem;cursor:pointer;text-decoration:underline;padding:0">Coach? Sign in with your gym username →</button>
+    </div>
     <div style="text-align:center;margin-top:.6rem">
       <a href="/" style="color:var(--mat-muted);font-family:var(--font-ui);font-size:.78rem;text-decoration:underline">← Home</a>
+    </div>
+  </div>
+</div>
+
+<!-- ─── COACH / KIOSK LOGIN ───────────────────────────────────────── -->
+<div id="coachLoginView" style="display:none;position:fixed;inset:0;background:#0D0D0D;z-index:200;align-items:center;justify-content:center">
+  <div style="background:var(--mat-panel);border:1px solid var(--mat-border);border-radius:8px;padding:2.5rem;width:100%;max-width:380px">
+    <div style="font-family:var(--font-display);font-size:2rem;letter-spacing:.15em;color:var(--mat-gold);text-align:center;margin-bottom:.25rem">BJJ MAT TIMER</div>
+    <div style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.3em;color:var(--mat-muted);text-align:center;margin-bottom:2rem;text-transform:uppercase">Coach sign-in</div>
+    <div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1.25rem">
+      <div>
+        <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Gym username</label>
+        <input type="text" id="coachUsername" placeholder="yourgym" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;transition:border-color .15s"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+          onkeydown="if(event.key==='Enter')document.getElementById('coachPassword').focus()">
+      </div>
+      <div>
+        <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Password</label>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <input type="password" id="coachPassword" placeholder="••••••••" autocapitalize="none" autocorrect="off" autocomplete="current-password"
+            style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;transition:border-color .15s"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+            onkeydown="if(event.key==='Enter')gymLogin()">
+          <button type="button" onclick="togglePw('coachPassword',this)" tabindex="-1"
+            style="flex-shrink:0;background:none;border:1px solid var(--mat-border);border-radius:4px;cursor:pointer;color:var(--mat-muted);font-size:.9rem;padding:.6rem .65rem;line-height:1">👁</button>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:.85rem" onclick="gymLogin()">Sign In</button>
+    <div id="coachAuthError" style="display:none;color:var(--mat-red);font-family:var(--font-ui);font-size:.85rem;text-align:center;margin-top:.75rem">Invalid username or password.</div>
+    <div style="text-align:center;margin-top:.9rem">
+      <button type="button" onclick="showLogin()" style="background:none;border:none;color:var(--mat-muted);font-family:var(--font-ui);font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0">← Gym owner sign-in</button>
     </div>
   </div>
 </div>
@@ -424,6 +460,28 @@
       <div id="accountBillingStatus" style="font-family:var(--font-ui);font-size:.9rem;color:var(--mat-text);margin-bottom:.5rem"></div>
       <div id="accountBillingBtn"></div>
     </div>
+    <div id="accountKioskSection" style="display:none;border-top:1px solid var(--mat-border);padding-top:1rem">
+      <div style="font-family:var(--font-ui);font-size:.7rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.4rem">Coach Login</div>
+      <div style="font-family:var(--font-ui);font-size:.78rem;color:var(--mat-muted);margin-bottom:.6rem">A shared username + password your coaches use to sign in on the gym device (no email needed), then pick their name and PIN.</div>
+      <div id="kioskCurrentUser" style="font-family:var(--font-ui);font-size:.82rem;color:var(--mat-text);margin-bottom:.6rem"></div>
+      <div style="display:flex;flex-direction:column;gap:.5rem">
+        <input type="text" id="kioskUsername" placeholder="Gym username (e.g. yourgym)" autocapitalize="none" autocorrect="off" spellcheck="false"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;width:100%;box-sizing:border-box;transition:border-color .15s"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <input type="password" id="kioskPassword" placeholder="Set a password (min 8 chars)" autocapitalize="none" autocorrect="off"
+            style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;transition:border-color .15s"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+          <button type="button" onclick="togglePw('kioskPassword',this)" tabindex="-1"
+            style="flex-shrink:0;background:none;border:1px solid var(--mat-border);border-radius:4px;cursor:pointer;color:var(--mat-muted);font-size:.85rem;padding:.5rem .55rem;line-height:1">👁</button>
+        </div>
+        <div id="kioskCredMsg" style="display:none;font-family:var(--font-ui);font-size:.8rem;line-height:1.4"></div>
+        <div style="display:flex;gap:.5rem">
+          <button class="btn btn-gold" style="flex:1;font-size:.85rem" onclick="saveKioskCredentials()">Save coach login</button>
+          <button class="btn btn-outline" id="kioskDisableBtn" style="display:none;font-size:.85rem" onclick="disableKioskLogin()">Disable</button>
+        </div>
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-red" id="accountSignOutBtn" style="font-size:.8rem;padding:.5rem 1rem" onclick="accountSignOutClick()">Sign Out</button>
       <button class="btn btn-outline" onclick="closeAccountModal()">Close</button>
@@ -753,7 +811,7 @@
   </div>
 </div>
 
-<script src="/js/app.js?v=26"></script>
+<script src="/js/app.js?v=27"></script>
 
 </body>
 </html>

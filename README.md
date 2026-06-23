@@ -127,6 +127,29 @@ Browser-safe config lives in `public/supabase-config.js` (publishable key) and `
   alter table gym_devices enable row level security; -- no policies: service role only
   ```
 
+- **Coach/kiosk login** — a shared per-gym username + password (no email) that
+  mints a `coach`-role room token via `api/gym-login.js` (refreshed by
+  `api/kiosk-token.js`). The owner sets it from the Account modal
+  (`api/gym-credentials.js`). Add these columns + the rate-limit table once in
+  the Supabase SQL editor (`citext` makes the username case-insensitive-unique):
+
+  ```sql
+  create extension if not exists citext;
+  alter table gyms
+    add column kiosk_username      citext unique,
+    add column kiosk_password_hash text,
+    add column kiosk_password_salt text,
+    add column kiosk_updated_at    timestamptz;
+
+  create table gym_login_attempts (
+    id bigint generated always as identity primary key,
+    ip text not null,
+    created_at timestamptz not null default now()
+  );
+  create index gym_login_attempts_ip_time on gym_login_attempts (ip, created_at);
+  alter table gym_login_attempts enable row level security; -- no policies: service role only
+  ```
+
 Platform admins carry `app_metadata.role = 'admin'` and use `/admin.html`.
 
 ## Legacy LAN/Electron version

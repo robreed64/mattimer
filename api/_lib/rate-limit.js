@@ -51,7 +51,20 @@ async function checkPairingRate(admin, ip) {
   });
 }
 
+// Coach (gym username/password) login — same short window as pairing, since it's a
+// password guess surface; per-IP cap limits brute force before tripping.
+const GYM_LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const GYM_LOGIN_PER_IP_MAX = 10;
+const GYM_LOGIN_GLOBAL_MAX = 200;
+
+async function checkGymLoginRate(admin, ip) {
+  return checkRate(admin, 'gym_login_attempts', ip, {
+    windowMs: GYM_LOGIN_WINDOW_MS, perIpMax: GYM_LOGIN_PER_IP_MAX, globalMax: GYM_LOGIN_GLOBAL_MAX,
+  });
+}
+
 module.exports = {
   checkSignupRate, PER_IP_MAX: SIGNUP_PER_IP_MAX, GLOBAL_MAX: SIGNUP_GLOBAL_MAX,
   checkPairingRate, PAIRING_PER_IP_MAX, PAIRING_GLOBAL_MAX,
+  checkGymLoginRate, GYM_LOGIN_PER_IP_MAX, GYM_LOGIN_GLOBAL_MAX,
 };

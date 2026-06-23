@@ -28,6 +28,10 @@ function _isDemoRoom() { return roomId?.toLowerCase() === 'demo'; }
 // has no Supabase account — it authenticates with a long-lived device
 // token stored here instead. See api/pairing-redeem.js / api/device-token.js.
 const DEVICE_STORAGE_KEY = 'mattimer_device';
+// Coach/kiosk login (gym username+password): a long-lived kiosk-auth token stored
+// here lets a shared gym device re-mint room tokens without re-entering the
+// password. See api/gym-login.js / api/kiosk-token.js.
+const KIOSK_STORAGE_KEY = 'mattimer_kiosk';
 
 function _loadDeviceRecord() {
   try {
@@ -38,6 +42,33 @@ function _loadDeviceRecord() {
 
 function _saveDeviceRecord(rec) {
   try { localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(rec)); } catch(e) {}
+}
+
+function _loadKioskRecord() {
+  try {
+    const raw = localStorage.getItem(KIOSK_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function _saveKioskRecord(rec) {
+  try { localStorage.setItem(KIOSK_STORAGE_KEY, JSON.stringify(rec)); } catch(e) {}
+}
+
+// Exchanges a stored kiosk token for a fresh room token; clears it on rejection
+// (e.g. the owner turned off coach login, or the subscription lapsed).
+async function _mintKioskRoomToken(kiosk) {
+  try {
+    const res = await fetch('/api/kiosk-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roomId, kioskToken: kiosk.kioskToken }),
+    });
+    if (!res.ok) { localStorage.removeItem(KIOSK_STORAGE_KEY); return null; }
+    const { roomToken, roomTokenExp } = await res.json();
+    _roomToken = roomToken; _roomTokenExp = roomTokenExp;
+    return _roomToken;
+  } catch(e) { return null; }
 }
 
 // Exchanges a stored device token for a fresh room token; clears the
@@ -79,6 +110,11 @@ async function _mintRoomToken() {
   const device = _loadDeviceRecord();
   if (device?.deviceToken && device.roomCode === roomId) {
     return _mintDeviceRoomToken(device);
+  }
+  // …or a coach/kiosk login's long-lived token.
+  const kiosk = _loadKioskRecord();
+  if (kiosk?.kioskToken && kiosk.roomCode === roomId) {
+    return _mintKioskRoomToken(kiosk);
   }
   return null;
 }
@@ -130,6 +166,58 @@ async function _resumeDeviceSession() {
   await _finishRoomSetup();
   openMatPicker();
   return true;
+}
+
+// Silently resumes a coach/kiosk login (no Supabase session, but a stored kiosk
+// token for this room) so a shared gym device stays signed in across reloads.
+async function _resumeKioskSession() {
+  const kiosk = _loadKioskRecord();
+  if (!kiosk?.kioskToken || kiosk.roomCode !== roomId) return false;
+  const token = await _mintKioskRoomToken(kiosk);
+  if (!token) return false;
+  _gymRole = 'coach';
+  await _finishRoomSetup();
+  openMatPicker();
+  return true;
+}
+
+// Coach signs in with the gym's shared username + password (no email account).
+// Mirrors _redeemPairingCode: stores a kiosk token and drops into the mat picker.
+async function gymLogin() {
+  const username = (document.getElementById('coachUsername').value || '').trim().toLowerCase();
+  const password = document.getElementById('coachPassword').value || '';
+  const err = document.getElementById('coachAuthError');
+  if (err) err.style.display = 'none';
+  if (!username || !password) {
+    if (err) { err.textContent = 'Enter your gym username and password.'; err.style.display = 'block'; }
+    return;
+  }
+  try {
+    const res = await fetch('/api/gym-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (err) { err.textContent = data.error || 'Invalid username or password.'; err.style.display = 'block'; }
+      return;
+    }
+    _saveKioskRecord({ kioskToken: data.kioskToken, roomCode: data.roomCode });
+    roomId = data.roomCode;
+    // Put the room in the URL so a reload resumes via _resumeKioskSession.
+    const url = new URL(location.href);
+    url.searchParams.set('room', roomId);
+    history.replaceState(null, '', url.toString());
+    _roomToken = data.roomToken; _roomTokenExp = data.roomTokenExp;
+    _gymRole = 'coach';
+    _gymName = data.gymName || _gymName;
+    document.getElementById('coachLoginView').style.display = 'none';
+    await _finishRoomSetup();
+    openMatPicker();
+  } catch(e) {
+    if (err) { err.textContent = 'Network error. Please try again.'; err.style.display = 'block'; }
+  }
 }
 
 async function _freshRoomToken() {
@@ -237,7 +325,19 @@ function accountSignOutClick() {
 function showLogin() {
   document.getElementById('marketingView').style.display = 'none';
   document.getElementById('signupView').style.display = 'none';
+  document.getElementById('coachLoginView').style.display = 'none';
   document.getElementById('loginView').style.display = 'flex';
+}
+
+// Coach (gym username/password) sign-in view.
+function showCoachLogin() {
+  document.getElementById('marketingView').style.display = 'none';
+  document.getElementById('signupView').style.display = 'none';
+  document.getElementById('loginView').style.display = 'none';
+  const err = document.getElementById('coachAuthError');
+  if (err) err.style.display = 'none';
+  document.getElementById('coachLoginView').style.display = 'flex';
+  setTimeout(() => document.getElementById('coachUsername').focus(), 50);
 }
 
 function showSignup() {
@@ -256,6 +356,7 @@ function showSignup() {
 function backToMarketing() {
   document.getElementById('signupView').style.display = 'none';
   document.getElementById('loginView').style.display = 'none';
+  document.getElementById('coachLoginView').style.display = 'none';
   document.getElementById('marketingView').style.display = 'flex';
 }
 
@@ -339,7 +440,74 @@ function openAccountModal() {
     billingSection.style.display = 'none';
   }
 
+  // Coach Login (gym username/password) — owners only
+  const kioskSection = document.getElementById('accountKioskSection');
+  if (kioskSection) {
+    if (_gymRole === 'owner') {
+      kioskSection.style.display = 'block';
+      document.getElementById('kioskUsername').value = '';
+      document.getElementById('kioskPassword').value = '';
+      document.getElementById('kioskCredMsg').style.display = 'none';
+      _refreshKioskUsername();
+    } else {
+      kioskSection.style.display = 'none';
+    }
+  }
+
   document.getElementById('accountModal').style.display = 'flex';
+}
+
+async function _refreshKioskUsername() {
+  const label = document.getElementById('kioskCurrentUser');
+  if (!label) return;
+  label.textContent = 'Loading…';
+  try {
+    const { data: { session } } = await _supabase.auth.getSession();
+    const res = await fetch('/api/gym-credentials', { headers: { 'Authorization': 'Bearer ' + session.access_token } });
+    const data = await res.json().catch(() => ({}));
+    const u = res.ok ? data.username : null;
+    label.textContent = u ? ('Current username: ' + u) : 'Not set up yet';
+    document.getElementById('kioskDisableBtn').style.display = u ? '' : 'none';
+  } catch(e) { label.textContent = ''; }
+}
+
+async function saveKioskCredentials() {
+  const username = (document.getElementById('kioskUsername').value || '').trim().toLowerCase();
+  const password = document.getElementById('kioskPassword').value || '';
+  const msg = document.getElementById('kioskCredMsg');
+  const show = (t, c) => { msg.style.display = 'block'; msg.style.color = c; msg.textContent = t; };
+  if (!username || !password) { show('Enter a username and password.', 'var(--mat-red)'); return; }
+  try {
+    const { data: { session } } = await _supabase.auth.getSession();
+    const res = await fetch('/api/gym-credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { show(data.error || 'Could not save coach login.', 'var(--mat-red)'); return; }
+    document.getElementById('kioskUsername').value = '';
+    document.getElementById('kioskPassword').value = '';
+    show('Coach login saved.', 'var(--mat-gold)');
+    _refreshKioskUsername();
+  } catch(e) { show('Network error. Please try again.', 'var(--mat-red)'); }
+}
+
+async function disableKioskLogin() {
+  if (!confirm('Turn off coach login? Coaches will no longer be able to sign in with the gym username and password.')) return;
+  const msg = document.getElementById('kioskCredMsg');
+  try {
+    const { data: { session } } = await _supabase.auth.getSession();
+    const res = await fetch('/api/gym-credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ clear: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { msg.style.display = 'block'; msg.style.color = 'var(--mat-red)'; msg.textContent = data.error || 'Could not disable.'; return; }
+    msg.style.display = 'block'; msg.style.color = 'var(--mat-muted)'; msg.textContent = 'Coach login turned off.';
+    _refreshKioskUsername();
+  } catch(e) {}
 }
 
 function closeAccountModal(e) {
@@ -614,6 +782,8 @@ async function _afterAuth(user) {
     // A previously-paired phone has no Supabase session but may still
     // hold a long-lived device token for this room — try that next.
     if (roomId && await _resumeDeviceSession()) return;
+    // …or a coach/kiosk login on a shared gym device.
+    if (roomId && await _resumeKioskSession()) return;
     if (roomId) {
       document.getElementById('loginView').style.display = 'flex';
     } else {
