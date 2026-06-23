@@ -55,36 +55,29 @@ function _saveKioskRecord(rec) {
   try { localStorage.setItem(KIOSK_STORAGE_KEY, JSON.stringify(rec)); } catch(e) {}
 }
 
-// Exchanges a stored kiosk token for a fresh room token; clears it on rejection
-// (e.g. the owner turned off coach login, or the subscription lapsed).
-async function _mintKioskRoomToken(kiosk) {
+// Exchanges a stored long-lived token (device or kiosk) for a fresh room token;
+// clears the stored record on rejection (revoked, coach login turned off, or
+// subscription lapsed). Shared by the device-pairing and coach/kiosk paths.
+async function _mintFromStoredToken(url, body, storageKey) {
   try {
-    const res = await fetch('/api/coach-auth', {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'refresh', roomId, kioskToken: kiosk.kioskToken }),
+      body: JSON.stringify(body),
     });
-    if (!res.ok) { localStorage.removeItem(KIOSK_STORAGE_KEY); return null; }
+    if (!res.ok) { localStorage.removeItem(storageKey); return null; }
     const { roomToken, roomTokenExp } = await res.json();
     _roomToken = roomToken; _roomTokenExp = roomTokenExp;
     return _roomToken;
   } catch(e) { return null; }
 }
 
-// Exchanges a stored device token for a fresh room token; clears the
-// stored device on rejection (e.g. it was revoked from the Coaches modal).
-async function _mintDeviceRoomToken(device) {
-  try {
-    const res = await fetch('/api/device-token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roomId, deviceToken: device.deviceToken }),
-    });
-    if (!res.ok) { localStorage.removeItem(DEVICE_STORAGE_KEY); return null; }
-    const { roomToken, roomTokenExp } = await res.json();
-    _roomToken = roomToken; _roomTokenExp = roomTokenExp;
-    return _roomToken;
-  } catch(e) { return null; }
+function _mintKioskRoomToken(kiosk) {
+  return _mintFromStoredToken('/api/coach-auth', { action: 'refresh', roomId, kioskToken: kiosk.kioskToken }, KIOSK_STORAGE_KEY);
+}
+
+function _mintDeviceRoomToken(device) {
+  return _mintFromStoredToken('/api/device-token', { roomId, deviceToken: device.deviceToken }, DEVICE_STORAGE_KEY);
 }
 
 async function _mintRoomToken() {
@@ -155,12 +148,11 @@ async function _redeemPairingCode(code) {
   }
 }
 
-// Silently resumes a previously-paired phone (no Supabase session, no
-// `?pair=` param, but a stored device token for this room).
-async function _resumeDeviceSession() {
-  const device = _loadDeviceRecord();
-  if (!device?.deviceToken || device.roomCode !== roomId) return false;
-  const token = await _mintDeviceRoomToken(device);
+// Silently resumes a stored coach session (no Supabase login) for this room:
+// mint a room token, then drop into the mat picker. Shared by device + kiosk.
+async function _resumeStoredSession(record, mintFn) {
+  if (!record || record.roomCode !== roomId) return false;
+  const token = await mintFn(record);
   if (!token) return false;
   _gymRole = 'coach';
   await _finishRoomSetup();
@@ -168,17 +160,18 @@ async function _resumeDeviceSession() {
   return true;
 }
 
-// Silently resumes a coach/kiosk login (no Supabase session, but a stored kiosk
-// token for this room) so a shared gym device stays signed in across reloads.
-async function _resumeKioskSession() {
+// A previously-paired phone (stored device token for this room).
+function _resumeDeviceSession() {
+  const device = _loadDeviceRecord();
+  if (!device?.deviceToken) return Promise.resolve(false);
+  return _resumeStoredSession(device, _mintDeviceRoomToken);
+}
+
+// A coach/kiosk login (stored kiosk token) so a shared gym device stays signed in.
+function _resumeKioskSession() {
   const kiosk = _loadKioskRecord();
-  if (!kiosk?.kioskToken || kiosk.roomCode !== roomId) return false;
-  const token = await _mintKioskRoomToken(kiosk);
-  if (!token) return false;
-  _gymRole = 'coach';
-  await _finishRoomSetup();
-  openMatPicker();
-  return true;
+  if (!kiosk?.kioskToken) return Promise.resolve(false);
+  return _resumeStoredSession(kiosk, _mintKioskRoomToken);
 }
 
 // Coach signs in with the gym's shared username + password (no email account).
@@ -478,20 +471,29 @@ function openAccountModal() {
   document.getElementById('accountModal').style.display = 'flex';
 }
 
+// Owner-authenticated POST to /api/coach-auth. Returns { res, data }, or null
+// when the owner isn't signed in (so callers can prompt to sign in again rather
+// than throwing on a missing session). Centralizes the Bearer + action shape.
+async function _coachAuthCall(action, body) {
+  const { data: { session } } = await _supabase.auth.getSession();
+  if (!session) return null;
+  const res = await fetch('/api/coach-auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+    body: JSON.stringify({ action, ...(body || {}) }),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { res, data };
+}
+
 async function _refreshKioskUsername() {
   const label = document.getElementById('kioskCurrentUser');
   if (!label) return;
   label.textContent = 'Loading…';
   try {
-    const { data: { session } } = await _supabase.auth.getSession();
-    const res = await fetch('/api/coach-auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ action: 'credentials-get' }),
-    });
-    const data = await res.json().catch(() => ({}));
-    const u = res.ok ? data.username : null;
-    label.textContent = u ? ('Current username: ' + u) : 'Not set up yet';
+    const r = await _coachAuthCall('credentials-get');
+    const u = r && r.res.ok ? r.data.username : null;
+    label.textContent = u ? ('Current username: ' + u) : (r ? 'Not set up yet' : '');
     document.getElementById('kioskDisableBtn').style.display = u ? '' : 'none';
   } catch(e) { label.textContent = ''; }
 }
@@ -503,14 +505,9 @@ async function saveKioskCredentials() {
   const show = (t, c) => { msg.style.display = 'block'; msg.style.color = c; msg.textContent = t; };
   if (!username || !password) { show('Enter a username and password.', 'var(--mat-red)'); return; }
   try {
-    const { data: { session } } = await _supabase.auth.getSession();
-    const res = await fetch('/api/coach-auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ action: 'credentials-set', username, password }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { show(data.error || 'Could not save coach login.', 'var(--mat-red)'); return; }
+    const r = await _coachAuthCall('credentials-set', { username, password });
+    if (!r) { show('Your owner session expired — please sign in again.', 'var(--mat-red)'); return; }
+    if (!r.res.ok) { show(r.data.error || 'Could not save coach login.', 'var(--mat-red)'); return; }
     document.getElementById('kioskUsername').value = '';
     document.getElementById('kioskPassword').value = '';
     show('Coach login saved.', 'var(--mat-gold)');
@@ -521,20 +518,15 @@ async function saveKioskCredentials() {
 async function disableKioskLogin() {
   if (!confirm('Turn off coach login? Coaches will no longer be able to sign in with the gym username and password.')) return;
   const msg = document.getElementById('kioskCredMsg');
+  const show = (t, c) => { msg.style.display = 'block'; msg.style.color = c; msg.textContent = t; };
   try {
-    const { data: { session } } = await _supabase.auth.getSession();
-    const res = await fetch('/api/coach-auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ action: 'credentials-clear' }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { msg.style.display = 'block'; msg.style.color = 'var(--mat-red)'; msg.textContent = data.error || 'Could not disable.'; return; }
-    msg.style.display = 'block'; msg.style.color = 'var(--mat-muted)'; msg.textContent = 'Coach login turned off.';
+    const r = await _coachAuthCall('credentials-clear');
+    if (!r) { show('Your owner session expired — please sign in again.', 'var(--mat-red)'); return; }
+    if (!r.res.ok) { show(r.data.error || 'Could not disable.', 'var(--mat-red)'); return; }
+    show('Coach login turned off.', 'var(--mat-muted)');
     _refreshKioskUsername();
   } catch(e) {
-    msg.style.display = 'block'; msg.style.color = 'var(--mat-red)';
-    msg.textContent = 'Could not turn off coach login — it may still be active. Please try again.';
+    show('Could not turn off coach login — it may still be active. Please try again.', 'var(--mat-red)');
   }
 }
 

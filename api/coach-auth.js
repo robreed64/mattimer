@@ -120,10 +120,6 @@ module.exports = async function handler(req, res) {
     }
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
 
-    const { data: taken } = await admin
-      .from('gyms').select('id').eq('kiosk_username', username).neq('id', gym.id).maybeSingle();
-    if (taken) return res.status(409).json({ error: 'That username is taken — try another.' });
-
     const { hash, salt } = await hashPassword(password);
     const { error } = await admin.from('gyms').update({
       kiosk_username: username, kiosk_password_hash: hash, kiosk_password_salt: salt, kiosk_updated_at: new Date().toISOString(),
