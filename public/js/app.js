@@ -1945,7 +1945,9 @@ function closeSettingsModal(e) {
 // ─── DURATION (1–10 min pills) ────────────────────────────────────
 function setDurationMin(min) {
   state.roundDuration = min * 60;
-  if (!state.running) state.timeRemaining = state.roundDuration;
+  // Picking a duration restarts the round at the new time (the server restarts a
+  // running fight round too); reflect it immediately rather than waiting a tick.
+  if (!state.running || state.phase === 'fight') state.timeRemaining = state.roundDuration;
   document.querySelectorAll('.dur-pill').forEach((b, i) => {
     b.classList.toggle('active', i + 1 === min);
   });
