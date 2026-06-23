@@ -319,7 +319,26 @@ async function signOut() {
 // their current profile session — the device stays paired to the gym.
 function accountSignOutClick() {
   document.getElementById('accountModal').style.display = 'none';
-  if (_currentUser) signOut(); else exitToProfilePicker();
+  if (_currentUser) signOut(); else logoutCoach();
+}
+
+// A coach logs out, but the GYM stays signed in on the device (the kiosk token
+// is kept, so it auto-resumes next visit). Release the mat and return to the
+// coach (profile) picker for the next coach. The current mat selection is kept,
+// so the next coach who picks their name + PIN runs the same mat; use the
+// header "⇄ Switch" instead to pick a different mat.
+function logoutCoach() {
+  document.getElementById('accountModal').style.display = 'none';
+  if ((state.running || swRunning) && !confirm('Log out and end the current session on this mat?')) return;
+  if (socket) {
+    try { emit('ctrl:release'); } catch(e) {}
+    try { socket.close(); } catch(e) {}
+  }
+  mode = null;
+  myCtrlName = null; _pendingProfile = null;
+  document.getElementById('controller').style.display = 'none';
+  document.getElementById('landing').style.display = 'flex';
+  openProfilePicker();
 }
 
 function showLogin() {
@@ -410,7 +429,9 @@ function openAccountModal() {
 
   const hasUser = !!_currentUser;
   document.getElementById('accountChangePasswordSection').style.display = hasUser ? '' : 'none';
-  document.getElementById('accountSignOutBtn').textContent = hasUser ? 'Sign Out' : 'Switch Profile';
+  // A coach "logs out" back to the coach picker (the gym stays signed in on the
+  // device); an owner signs their account out entirely.
+  document.getElementById('accountSignOutBtn').textContent = hasUser ? 'Sign Out' : 'Log out';
 
   // Billing section — only for gym owners
   const billingSection = document.getElementById('accountBillingSection');
