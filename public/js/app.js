@@ -532,7 +532,10 @@ async function disableKioskLogin() {
     if (!res.ok) { msg.style.display = 'block'; msg.style.color = 'var(--mat-red)'; msg.textContent = data.error || 'Could not disable.'; return; }
     msg.style.display = 'block'; msg.style.color = 'var(--mat-muted)'; msg.textContent = 'Coach login turned off.';
     _refreshKioskUsername();
-  } catch(e) {}
+  } catch(e) {
+    msg.style.display = 'block'; msg.style.color = 'var(--mat-red)';
+    msg.textContent = 'Could not turn off coach login — it may still be active. Please try again.';
+  }
 }
 
 function closeAccountModal(e) {

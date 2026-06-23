@@ -556,13 +556,17 @@ export default class BjjTimerServer {
         console.log(`[auth warn-only] room ${this.room.id}: ${req.method} ${apiPath} without valid token`);
       }
     }
-    // Destructive routes are owner/admin only (once a token is present to say so)
+    // Destructive routes are owner/admin only (once a token is present to say so).
+    // Use an allowlist, not a denylist: besides 'coach', the long-lived
+    // 'device-auth' / 'kiosk-auth' tokens are also non-owner credentials that
+    // clients hold persistently — they must not be able to edit profiles,
+    // branding, or TV codes either.
     const destructive =
       (req.method === 'DELETE' && /^\/api\/profiles\/[^/]+$/.test(apiPath)) ||
       (req.method === 'PUT'    && /^\/api\/profiles\/[^/]+$/.test(apiPath)) ||
       (req.method === 'POST' && apiPath === '/api/branding') ||
       (req.method === 'POST' && /^\/api\/tvCodes\/\d+\/regenerate$/.test(apiPath));
-    if (destructive && auth && auth.role === 'coach') {
+    if (destructive && auth && auth.role !== 'owner' && auth.role !== 'admin') {
       return Response.json({ error: 'Owner access required' }, { status: 403, headers: cors });
     }
 
