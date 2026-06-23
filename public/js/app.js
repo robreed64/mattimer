@@ -828,7 +828,46 @@ async function deleteRoom(id) {
 // ─── COACHES PANEL (owner only) ───────────────────────────────────
 async function openCoachesModal() {
   document.getElementById('coachesModal').style.display = 'flex';
-  await Promise.all([loadCoaches(), loadDevices()]);
+  // Only owners can invite/create team members.
+  const inv = document.getElementById('inviteCoachSection');
+  if (inv) inv.style.display = _gymRole === 'owner' ? 'block' : 'none';
+  const msg = document.getElementById('inviteCoachMsg');
+  if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
+  await loadCoaches();
+}
+
+// Invite a coach by email — creates their account + gym membership via the
+// owner-only /api/create-user endpoint (Supabase sends the invite email).
+async function inviteCoach() {
+  if (_gymRole !== 'owner') return;
+  const nameEl  = document.getElementById('inviteCoachName');
+  const emailEl = document.getElementById('inviteCoachEmail');
+  const btn     = document.getElementById('inviteCoachBtn');
+  const msg     = document.getElementById('inviteCoachMsg');
+  const email = (emailEl.value || '').trim();
+  const name  = (nameEl.value || '').trim();
+  const showMsg = (text, color) => { msg.style.display = 'block'; msg.style.color = color; msg.textContent = text; };
+  if (!email) { emailEl.focus(); return; }
+
+  btn.disabled = true;
+  showMsg('Sending invite…', 'var(--mat-muted)');
+  try {
+    const { data: { session } } = await _supabase.auth.getSession();
+    const res = await fetch('/api/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ name, email, gymId: _gymId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showMsg(data.error || 'Could not send invite', 'var(--mat-red)'); return; }
+    showMsg('Invite sent to ' + email, 'var(--mat-gold)');
+    nameEl.value = ''; emailEl.value = '';
+    await loadCoaches();
+  } catch (e) {
+    showMsg('Could not send invite — check your connection', 'var(--mat-red)');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function closeCoachesModal(e) {
@@ -877,48 +916,6 @@ async function toggleMemberSettings(gymUserId, currentRole) {
   await loadCoaches();
 }
 
-function _fmtDeviceDate(iso) {
-  if (!iso) return 'never';
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-async function loadDevices() {
-  const list = document.getElementById('deviceList');
-  if (!list) return;
-  list.innerHTML = '<div style="color:var(--mat-muted);font-size:.85rem;padding:.25rem 0">Loading…</div>';
-
-  const { data: { session } } = await _supabase.auth.getSession();
-  const res = await fetch('/api/device-list', { headers: { 'Authorization': 'Bearer ' + session.access_token } });
-  const data = await res.json();
-  const devices = (data.devices || []).filter(d => !d.revoked_at);
-
-  if (!res.ok || !devices.length) {
-    list.innerHTML = '<div style="color:var(--mat-muted);font-family:var(--font-ui);font-size:.85rem;padding:.25rem 0">No paired devices yet — show the QR on the display screen.</div>';
-    return;
-  }
-
-  list.innerHTML = devices.map(d => `
-    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;padding:.5rem .75rem;gap:.5rem">
-      <span style="font-family:var(--font-ui);font-size:.9rem;flex:1;min-width:0">${escHtml(d.label || 'Coach phone')} <span style="color:var(--mat-muted);font-size:.8rem">— last used ${_fmtDeviceDate(d.last_seen_at)}</span></span>
-      <button onclick="revokeDevice('${d.id}')" style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-size:.8rem;padding:.2rem .4rem" title="Revoke">✕</button>
-    </div>
-  `).join('');
-}
-
-async function revokeDevice(deviceId) {
-  if (_gymRole !== 'owner') return;
-  if (!confirm('Revoke this device? It will lose access the next time it refreshes.')) return;
-  const { data: { session } } = await _supabase.auth.getSession();
-  const res = await fetch('/api/device-revoke', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-    body: JSON.stringify({ deviceId }),
-  });
-  const data = await res.json();
-  if (!res.ok) { toast('Error: ' + (data.error || 'Unknown error')); return; }
-  toast('Device revoked');
-  await loadDevices();
-}
 
 async function removeCoach(gymUserId) {
   if (_gymRole !== 'owner') return;
@@ -1799,7 +1796,13 @@ document.addEventListener('visibilitychange', () => {
 // the mat on the server) and returns to the mat picker. Does not touch the
 // device's pairing in localStorage, so this phone stays connected to the gym.
 function exitToProfilePicker() {
-  if (socket) { try { socket.close(); } catch(e) {} }
+  // Deliberate switch = release the mat(s) now so they're free to pick again and
+  // their screens return to idle. Confirm first if a class is actively running.
+  if ((state.running || swRunning) && !confirm('End the current session on this mat and switch?')) return;
+  if (socket) {
+    try { emit('ctrl:release'); } catch(e) {}
+    try { socket.close(); } catch(e) {}
+  }
   mode = null;
   myCtrlName = null; _pendingProfile = null; myCtrlMats = [];
   document.getElementById('controller').style.display = 'none';

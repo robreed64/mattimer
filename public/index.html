@@ -17,7 +17,7 @@
 <script src="/partykit-config.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="/css/main.css?v=25">
+<link rel="stylesheet" href="/css/main.css?v=26">
 </head>
 <body>
 
@@ -366,12 +366,21 @@
       <button class="modal-close" onclick="closeCoachesModal()">✕</button>
     </div>
     <div class="modal-body" style="gap:.75rem">
-      <div id="coachList" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:.5rem"></div>
-      <div style="border-top:1px solid var(--mat-border);padding-top:.75rem">
-        <div style="font-family:var(--font-ui);font-size:.8rem;letter-spacing:.1em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.5rem">Paired Devices</div>
-        <div style="font-family:var(--font-ui);font-size:.78rem;color:var(--mat-muted);margin-bottom:.5rem">Coach phones that scanned the QR code on the display screen — no email or password needed. Revoke a device below if a phone is lost or a coach leaves.</div>
-        <div id="deviceList" style="display:flex;flex-direction:column;gap:.5rem"></div>
+      <div id="inviteCoachSection" style="display:none;border-bottom:1px solid var(--mat-border);padding-bottom:.75rem;margin-bottom:.25rem">
+        <div style="font-family:var(--font-ui);font-size:.8rem;letter-spacing:.1em;color:var(--mat-muted);text-transform:uppercase;margin-bottom:.5rem">Invite a Coach</div>
+        <div style="font-family:var(--font-ui);font-size:.78rem;color:var(--mat-muted);margin-bottom:.5rem">They'll get an email invite to set a password and join your gym as a coach.</div>
+        <div style="display:flex;flex-direction:column;gap:.5rem">
+          <input type="text" id="inviteCoachName" placeholder="Name (optional)" autocomplete="off"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none">
+          <div style="display:flex;gap:.5rem">
+            <input type="email" id="inviteCoachEmail" placeholder="coach@email.com" autocapitalize="none" autocorrect="off" spellcheck="false"
+              style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none">
+            <button class="btn btn-gold" id="inviteCoachBtn" style="font-size:.8rem;padding:.5rem .9rem;white-space:nowrap" onclick="inviteCoach()">Invite</button>
+          </div>
+          <div id="inviteCoachMsg" style="display:none;font-family:var(--font-ui);font-size:.78rem;line-height:1.4"></div>
+        </div>
       </div>
+      <div id="coachList" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:.5rem"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeCoachesModal()">Close</button>
@@ -744,7 +753,7 @@
   </div>
 </div>
 
-<script src="/js/app.js?v=25"></script>
+<script src="/js/app.js?v=26"></script>
 
 </body>
 </html>

@@ -379,6 +379,26 @@ export default class BjjTimerServer {
         break;
       }
 
+      // Deliberate "Switch" / leave — fully release this coach's mats now (clear
+      // timer, stopwatch, tab, ownership; return each TV to idle), unlike an
+      // accidental disconnect, which keeps a busy mat alive for a grace period.
+      case 'ctrl:release': {
+        if (!ctrl) return;
+        for (const m of (ctrl.mats || [ctrl.slot])) {
+          this.timerStates[m] = null;
+          this.swStates[m] = null;
+          this.activeTab[m] = 'timer';
+          this.matClientId[m] = null;
+          this._clearIdleSweep(m);
+          this.room.storage.delete('timerState:' + m).catch(() => {});
+          this.room.storage.delete('stopwatchState:' + m).catch(() => {});
+          this.room.storage.delete('activeTab:' + m).catch(() => {});
+          this._freeCtrlSlot(m, true); // notify the TV → it returns to the idle clock
+        }
+        this._broadcastMatStatus();
+        break;
+      }
+
       case 'profile:save': {
         if (!ctrl) return;
         const profile = this.config.profiles.find(p => p.id === msg.profileId);
