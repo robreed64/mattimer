@@ -290,10 +290,11 @@ export default class BjjTimerServer {
         return;
       }
       const mat = idx + 1; // a TV is permanently pinned to one mat by its code
-      // Replace any stale TV connection still bound to this mat.
-      for (const c of this.room.getConnections('tv')) {
-        if (c.id !== connection.id && c.state?.tvSlot === mat) { try { c.close(); } catch {} }
-      }
+      // Multiple screens may share a mat code (mirror one timer onto several
+      // displays). _sendToTv broadcasts to every TV on the mat, and a reloaded
+      // TV's old socket is dropped via onClose — so we do NOT close other TVs
+      // here. (Force-closing same-mat TVs caused a connect/reconnect war that
+      // made the second screen flap and lag.)
       connection.setState({ role: 'tv', tvSlot: mat });
       this._safeSend(connection, JSON.stringify({ type: 'branding', ...this.config.branding }));
       // Reflect the mat's controlling coach + live timer/stopwatch on connect. If
