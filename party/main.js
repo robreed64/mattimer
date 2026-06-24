@@ -858,6 +858,7 @@ export default class BjjTimerServer {
       if (!due) continue;
       if (this.ctrlSlots[p]) { this.idleSweepAt[p] = 0; changed = true; continue; } // reclaimed
       if (this.timerStates[p]?.running) continue;                                    // still ticking — wait
+      if (this.swStates[p]?.running) continue;                                       // live stopwatch — runs until a coach stops it
       if (now < due) continue;
       // Finalize: tell the group's TVs the mat is idle and fully release it
       // (timer, stopwatch, and active tab).

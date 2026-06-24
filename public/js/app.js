@@ -2121,7 +2121,7 @@ function applyControllerStateSnapshot(s, { silent = false } = {}) {
     }
   }
 
-  updateUI(); _updateStartPauseBtn();
+  updateUI(); _updateStartPauseBtn(); _seedTimerInterp();
 }
 
 // ─── SETTINGS MODAL ───────────────────────────────────────────────
@@ -2189,22 +2189,68 @@ function sendQuickMsg(m) { document.getElementById('msgInput').value = m; emit('
 
 // ─── UI UPDATE ────────────────────────────────────────────────────
 function formatTime(s) { return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
-function getTimerClass() {
+function getTimerClass(remaining = state.timeRemaining) {
   if (state.phase === 'fight' && state.warningEnabled) {
-    if (state.timeRemaining <= 10) return 'danger';
-    if (state.timeRemaining <= state.warningThreshold) return 'warning';
+    if (remaining <= 10) return 'danger';
+    if (remaining <= state.warningThreshold) return 'warning';
   }
   return '';
 }
 function updateUI() {
   if (mode !== 'controller') return;
-  const timeStr = formatTime(state.timeRemaining), cls = getTimerClass();
-  const ctrlTimer = document.getElementById('ctrlTimer');
-  ctrlTimer.textContent = timeStr; ctrlTimer.className = 'ctrl-timer-display ' + cls;
+  _paintTimer(state.timeRemaining);
   document.getElementById('ctrlRoundLabel').textContent = state.phase === 'rest' ? 'Rest' : `Round ${state.currentRound} of ${state.totalRounds}`;
   const pl = document.getElementById('ctrlPhaseLabel');
   pl.textContent = state.phase === 'fight' ? 'Fight' : 'Rest';
   pl.className = 'phase-label ' + state.phase;
+}
+
+// ─── TIMER INTERPOLATION ──────────────────────────────────────────
+// The server pushes timer state ~1 Hz; between pushes we count down locally
+// from a wall-clock anchor (performance.now), so a brief gap in the broadcast
+// stream — a TV's flaky WebSocket, a render stall on an underpowered TV stick,
+// a momentary server delay — doesn't freeze the on-screen clock. Every server
+// `state` message re-seeds this loop, so the server stays authoritative; local
+// counting only fills the gaps. Display-only: sounds/phase changes still come
+// from the server. Mirrors the stopwatch's anchor model (see sw:state).
+let _timerRaf = null, _timerSeedMs = 0, _timerAnchor = 0;
+
+function _stopTimerInterp() {
+  if (_timerRaf) cancelAnimationFrame(_timerRaf);
+  _timerRaf = null;
+}
+
+// Paint the active timer face (TV or controller) for a given remaining-seconds.
+function _paintTimer(sec) {
+  const timeStr = formatTime(sec), cls = getTimerClass(sec);
+  if (mode === 'display') {
+    const el = document.getElementById('displayTime');
+    if (el) { el.textContent = timeStr; el.className = 'display-time ' + cls; }
+  } else if (mode === 'controller') {
+    const el = document.getElementById('ctrlTimer');
+    if (el) { el.textContent = timeStr; el.className = 'ctrl-timer-display ' + cls; }
+  }
+}
+
+// Re-seed local interpolation from the latest authoritative snapshot. Counts
+// down only while the timer is running; when paused/stopped we leave the
+// snapshot's painted value in place.
+function _seedTimerInterp() {
+  _stopTimerInterp();
+  // The server reports ceil(realRemaining) (it floors elapsed), so seeding from
+  // timeRemaining seconds and ceil-ing the live value keeps us in lockstep.
+  _timerSeedMs = state.timeRemaining * 1000;
+  _timerAnchor = performance.now();
+  if (state.running && state.timeRemaining > 0) _timerRaf = requestAnimationFrame(_timerInterpTick);
+}
+
+function _timerInterpTick() {
+  const liveMs = Math.max(0, _timerSeedMs - (performance.now() - _timerAnchor));
+  _paintTimer(Math.ceil(liveMs / 1000));
+  // Hold at 0 once we run out; the server's phase-end message re-seeds us into
+  // the next round/rest within a tick.
+  if (liveMs <= 0) { _timerRaf = null; return; }
+  _timerRaf = requestAnimationFrame(_timerInterpTick);
 }
 
 function applyStateSnapshot(s) {
@@ -2221,6 +2267,8 @@ function applyStateSnapshot(s) {
   dPhase.textContent = state.phase === 'fight' ? 'FIGHT' : 'REST';
   dPhase.className = 'display-phase ' + state.phase;
   document.getElementById('displayInner').classList.toggle('phase-rest', state.phase === 'rest');
+
+  _seedTimerInterp();
 
   // Persist last known state to service worker so display survives server restart
   if (navigator.serviceWorker?.controller) {
