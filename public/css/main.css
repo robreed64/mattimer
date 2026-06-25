@@ -358,6 +358,12 @@
     border-color: var(--mat-muted);
     color: var(--mat-muted);
   }
+  .landing-settings-btn {
+    left: auto;
+    right: 1.25rem;
+    font-size: .75rem;
+    letter-spacing: .05em;
+  }
 
   /* ─── SHARE PAGE ──────────────────────────────────────────────── */
   @media (max-width: 480px) {
