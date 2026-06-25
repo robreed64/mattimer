@@ -168,6 +168,7 @@
   .display-analog .clock-face { fill: #fff; stroke: rgba(0,0,0,.15); stroke-width: 2; }
   .display-analog .clock-tick { stroke: rgba(0,0,0,.45); stroke-width: 2; }
   .display-analog .clock-tick.major { stroke: rgba(0,0,0,.85); stroke-width: 4; }
+  .display-analog .clock-number { font-family: var(--font-ui); font-size: 14px; fill: rgba(0,0,0,.75); text-anchor: middle; dominant-baseline: central; }
   .display-analog .clock-hand { stroke: #1a1a1a; stroke-linecap: round; }
   .display-analog .clock-hand.hour { stroke-width: 6; }
   .display-analog .clock-hand.min  { stroke-width: 4; }

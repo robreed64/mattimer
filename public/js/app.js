@@ -2480,18 +2480,33 @@ function _updateBigClock() {
 // Build the 12 hour ticks once (major marks at 12/3/6/9).
 function _buildAnalogTicks() {
   const g = document.getElementById('acTicks');
-  if (!g || g.childElementCount) return;
-  const ns = 'http://www.w3.org/2000/svg';
-  for (let i = 0; i < 12; i++) {
-    const ang = i * 30 * Math.PI / 180;
-    const outer = 96, inner = i % 3 === 0 ? 80 : 86;
-    const ln = document.createElementNS(ns, 'line');
-    ln.setAttribute('x1', (100 + outer * Math.sin(ang)).toFixed(2));
-    ln.setAttribute('y1', (100 - outer * Math.cos(ang)).toFixed(2));
-    ln.setAttribute('x2', (100 + inner * Math.sin(ang)).toFixed(2));
-    ln.setAttribute('y2', (100 - inner * Math.cos(ang)).toFixed(2));
-    ln.setAttribute('class', 'clock-tick' + (i % 3 === 0 ? ' major' : ''));
-    g.appendChild(ln);
+  if (g && !g.childElementCount) {
+    const ns = 'http://www.w3.org/2000/svg';
+    for (let i = 0; i < 12; i++) {
+      const ang = i * 30 * Math.PI / 180;
+      const outer = 96, inner = i % 3 === 0 ? 80 : 86;
+      const ln = document.createElementNS(ns, 'line');
+      ln.setAttribute('x1', (100 + outer * Math.sin(ang)).toFixed(2));
+      ln.setAttribute('y1', (100 - outer * Math.cos(ang)).toFixed(2));
+      ln.setAttribute('x2', (100 + inner * Math.sin(ang)).toFixed(2));
+      ln.setAttribute('y2', (100 - inner * Math.cos(ang)).toFixed(2));
+      ln.setAttribute('class', 'clock-tick' + (i % 3 === 0 ? ' major' : ''));
+      g.appendChild(ln);
+    }
+  }
+  const numG = document.getElementById('acNumbers');
+  if (numG && !numG.childElementCount) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const r = 68;
+    for (let h = 1; h <= 12; h++) {
+      const ang = h * 30 * Math.PI / 180;
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', (100 + r * Math.sin(ang)).toFixed(2));
+      t.setAttribute('y', (100 - r * Math.cos(ang)).toFixed(2));
+      t.setAttribute('class', 'clock-number');
+      t.textContent = h;
+      numG.appendChild(t);
+    }
   }
 }
 
