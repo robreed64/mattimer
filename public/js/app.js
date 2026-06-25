@@ -634,6 +634,7 @@ function _enterDemoMode() {
   document.getElementById('loginView').style.display = 'none';
   document.getElementById('roomBar').style.display = 'flex';
   document.getElementById('demoBanner').style.display = 'flex';
+  document.getElementById('landingSettingsBtn')?.style.setProperty('display', '');
   const codeEl = document.getElementById('roomCodeDisplay');
   if (codeEl) codeEl.textContent = 'Demo';
   partyFetch('/api/config').then(r => r.json()).then(cfg => {
@@ -721,6 +722,7 @@ async function _afterAuth(user) {
     }
     document.getElementById('teamBtn')?.style.setProperty('display', 'inline-flex');
     document.getElementById('brandingBtn')?.style.setProperty('display', 'inline-flex');
+    document.getElementById('landingSettingsBtn')?.style.setProperty('display', '');
     return;
   }
 
@@ -914,6 +916,7 @@ async function _finishRoomSetup() {
   if (_gymRole === 'owner') {
     const btn = document.getElementById('coachesBtn');
     if (btn) btn.style.display = '';
+    document.getElementById('landingSettingsBtn')?.style.setProperty('display', '');
   }
 
   partyFetch('/api/config').then(r => r.json()).then(cfg => {
