@@ -40,6 +40,7 @@ module.exports = [
         ...globals.serviceworker,
         PartySocket: 'readonly', // vendored partysocket.js
         QRCode: 'readonly',      // qrcodejs CDN script
+        roundProgress: 'readonly', // public/js/progress.js
       },
     },
     rules: {
