@@ -211,6 +211,10 @@
     text-transform: uppercase;
   }
   .display-clock { position: absolute; bottom: 1.25rem; left: 1.5rem; font-family: var(--font-display); font-size: clamp(70px,8vw,110px); letter-spacing: .04em; color: rgba(255,255,255,.6); line-height: 1; }
+  .display-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 12px; background: rgba(255,255,255,.06); z-index: 1; pointer-events: none; }
+  .display-progress-fill { height: 100%; width: 100%; transform-origin: left; transform: scaleX(1); background: var(--mat-red); will-change: transform; }
+  .display-inner.phase-rest .display-progress-fill { background: var(--go-color); }
+  @media (prefers-reduced-motion: reduce) { .display-progress-fill { transition: none !important; } }
   .display-status { position: absolute; bottom: 1rem; right: 1rem; font-family: var(--font-ui); font-size: .75rem; letter-spacing: .15em; color: rgba(255,255,255,.15); text-transform: uppercase; display: flex; align-items: center; gap: .4rem; }
 
 

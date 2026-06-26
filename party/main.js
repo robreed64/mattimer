@@ -6,7 +6,7 @@ const CTRL_COLORS = { 1: 'blue', 2: 'green', 3: 'amber', 4: 'pink' };
 const PROFILE_COLORS = ['#3B82F6','#10B981','#F59E0B','#EC4899','#8B5CF6','#EF4444','#06B6D4','#F97316'];
 const DEFAULT_SETTINGS = {
   roundDuration: 300, restDuration: 60, totalRounds: 10,
-  warningEnabled: true, warningThreshold: 30, showRound: false,
+  warningEnabled: true, warningThreshold: 30, showRound: true,
 };
 
 import { makeCode } from '../lib/room-code';
@@ -899,7 +899,7 @@ export default class BjjTimerServer {
       running: false, phase: 'fight', currentRound: 1,
       roundDuration: 300, restDuration: 60, totalRounds: 10,
       timeRemaining: 300, warningEnabled: true, warningThreshold: 30,
-      showRound: false, startedAt: null, timeRemainingAtStart: 0,
+      showRound: true, startedAt: null, timeRemainingAtStart: 0,
     };
   }
 

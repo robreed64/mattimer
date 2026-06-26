@@ -1126,7 +1126,7 @@ const state = {
   roundDuration: 5 * 60, restDuration: 60, totalRounds: 10,
   currentRound: 1, timeRemaining: 5 * 60, running: false,
   phase: 'fight', warningEnabled: true, warningThreshold: 30,
-  showRound: false, overlayMsg: '',
+  showRound: true, overlayMsg: '',
 };
 
 let tvCodes = [];
@@ -2258,7 +2258,7 @@ function applyStateSnapshot(s) {
   // The timer face (#displayTime) is painted by _seedTimerInterp() → _paintTimer() below.
   const roundEl = document.getElementById('displayRound');
   if (roundEl) {
-    roundEl.textContent = state.phase === 'rest' ? 'REST' : `Round ${state.currentRound} of ${state.totalRounds}`;
+    roundEl.textContent = `Round ${state.currentRound} of ${state.totalRounds}`;
     roundEl.style.display = state.showRound ? '' : 'none';
   }
   const dPhase = document.getElementById('displayPhase');
@@ -2266,6 +2266,7 @@ function applyStateSnapshot(s) {
   dPhase.className = 'display-phase ' + state.phase;
   document.getElementById('displayInner').classList.toggle('phase-rest', state.phase === 'rest');
 
+  applyProgress(state);
   _seedTimerInterp();
 
   // Persist last known state to service worker so display survives server restart
@@ -2462,6 +2463,35 @@ function _refreshDisplayMode() {
   }
   // Bottom-left shows the date in clock mode, the time otherwise — refresh now.
   updateDisplayClock();
+  applyProgress(state);
+}
+
+// True when the countdown timer panel is the active display view (not the
+// stopwatch tab, not an idle wall-clock). Mirrors the show condition for
+// #displayPanelTimer in _refreshDisplayMode().
+function timerPanelActive() {
+  return mode === 'display' && !_isIdleClockMode() && _displayTab === 'timer';
+}
+
+// Drive the bottom progress bar. Running → deplete to empty over the remaining
+// seconds via a linear CSS transform transition; paused/reset → freeze at the
+// current fraction. Seeds from the same timeRemaining as the number, so the two
+// stay in sync without touching the throttled rAF interpolation loop.
+function applyProgress(s) {
+  const wrap = document.getElementById('displayProgress');
+  const fill = document.getElementById('displayProgressFill');
+  if (!wrap || !fill) return;
+  const full = s.phase === 'rest' ? s.restDuration : s.roundDuration;
+  if (!timerPanelActive() || !full || full <= 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  const frac = roundProgress(s);
+  fill.style.transition = 'none';            // freeze at the current fraction
+  fill.style.transform  = 'scaleX(' + frac + ')';
+  void fill.offsetWidth;                       // force reflow so the transition starts from frac
+  if (s.running && s.timeRemaining > 0) {
+    fill.style.transition = 'transform ' + s.timeRemaining + 's linear';
+    fill.style.transform  = 'scaleX(0)';       // deplete to empty over the remaining time
+  }
 }
 
 function _updateBigClock() {
