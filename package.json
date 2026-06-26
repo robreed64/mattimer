@@ -13,7 +13,8 @@
     "dev": "partykit dev",
     "deploy": "partykit deploy",
     "lint": "eslint .",
-    "test": "node --test"
+    "test": "node --test",
+    "check-token": "node scripts/check-room-token.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.0",

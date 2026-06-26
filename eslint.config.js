@@ -5,7 +5,7 @@ module.exports = [
   { ignores: ['node_modules/', 'dist/', '.partykit/', '.flatpak-builder/', 'public/supabase.js', 'public/partysocket.js'] },
   js.configs.recommended,
   {
-    files: ['api/**/*.js', 'lib/**/*.js', 'test/**/*.js', 'eslint.config.js'],
+    files: ['api/**/*.js', 'lib/**/*.js', 'test/**/*.js', 'scripts/**/*.js', 'eslint.config.js'],
     languageOptions: {
       sourceType: 'commonjs',
       globals: { ...globals.node },
