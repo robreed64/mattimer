@@ -1126,7 +1126,7 @@ const state = {
   roundDuration: 5 * 60, restDuration: 60, totalRounds: 10,
   currentRound: 1, timeRemaining: 5 * 60, running: false,
   phase: 'fight', warningEnabled: true, warningThreshold: 30,
-  showRound: false, overlayMsg: '',
+  showRound: true, overlayMsg: '',
 };
 
 let tvCodes = [];
@@ -2258,7 +2258,7 @@ function applyStateSnapshot(s) {
   // The timer face (#displayTime) is painted by _seedTimerInterp() → _paintTimer() below.
   const roundEl = document.getElementById('displayRound');
   if (roundEl) {
-    roundEl.textContent = state.phase === 'rest' ? 'REST' : `Round ${state.currentRound} of ${state.totalRounds}`;
+    roundEl.textContent = `Round ${state.currentRound} of ${state.totalRounds}`;
     roundEl.style.display = state.showRound ? '' : 'none';
   }
   const dPhase = document.getElementById('displayPhase');
