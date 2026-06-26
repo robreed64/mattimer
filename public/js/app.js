@@ -2189,7 +2189,7 @@ function updateUI() {
 // `state` message re-seeds this loop, so the server stays authoritative; local
 // counting only fills the gaps. Display-only: sounds/phase changes still come
 // from the server. Mirrors the stopwatch's anchor model (see sw:state).
-let _timerRaf = null, _timerSeedMs = 0, _timerAnchor = 0;
+let _timerRaf = null, _timerSeedMs = 0, _timerAnchor = 0, _timerLastSec = -1;
 
 function _stopTimerInterp() {
   if (_timerRaf) cancelAnimationFrame(_timerRaf);
@@ -2213,16 +2213,21 @@ function _paintTimer(sec) {
 // snapshot's painted value in place.
 function _seedTimerInterp() {
   _stopTimerInterp();
+  _paintTimer(state.timeRemaining);   // paint the authoritative snapshot immediately (covers the paused/stopped case)
   // The server reports ceil(realRemaining) (it floors elapsed), so seeding from
   // timeRemaining seconds and ceil-ing the live value keeps us in lockstep.
   _timerSeedMs = state.timeRemaining * 1000;
   _timerAnchor = performance.now();
+  _timerLastSec = state.timeRemaining;
   if (state.running && state.timeRemaining > 0) _timerRaf = requestAnimationFrame(_timerInterpTick);
 }
 
 function _timerInterpTick() {
   const liveMs = Math.max(0, _timerSeedMs - (performance.now() - _timerAnchor));
-  _paintTimer(Math.ceil(liveMs / 1000));
+  // Display value is whole seconds, so repaint only when the second rolls over —
+  // the rAF runs ~60 Hz but the DOM only needs touching ~1 Hz.
+  const sec = Math.ceil(liveMs / 1000);
+  if (sec !== _timerLastSec) { _timerLastSec = sec; _paintTimer(sec); }
   // Hold at 0 once we run out; the server's phase-end message re-seeds us into
   // the next round/rest within a tick.
   if (liveMs <= 0) { _timerRaf = null; return; }
@@ -2231,9 +2236,7 @@ function _timerInterpTick() {
 
 function applyStateSnapshot(s) {
   Object.assign(state, s);
-  const timeStr = formatTime(state.timeRemaining), cls = getTimerClass();
-  document.getElementById('displayTime').textContent = timeStr;
-  document.getElementById('displayTime').className = 'display-time ' + cls;
+  // The timer face (#displayTime) is painted by _seedTimerInterp() → _paintTimer() below.
   const roundEl = document.getElementById('displayRound');
   if (roundEl) {
     roundEl.textContent = state.phase === 'rest' ? 'REST' : `Round ${state.currentRound} of ${state.totalRounds}`;
