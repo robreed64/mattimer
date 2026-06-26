@@ -61,20 +61,30 @@ Depletion animates via `scaleX()` (compositor, no layout thrash). Phase color
 rides the **existing** `.phase-rest` toggle on `#displayInner` — no extra JS for
 color.
 
-### 3. Pure fraction helper (`lib/progress.js`, CJS)
+### 3. Pure fraction helper (`public/js/progress.js`, UMD)
 
 ```js
-function roundProgress(s) {
-  const full = s.phase === 'rest' ? s.restDuration : s.roundDuration;
-  if (!full || full <= 0) return 0;
-  return Math.max(0, Math.min(1, s.timeRemaining / full));
-}
-module.exports = { roundProgress };
+(function (root) {
+  function roundProgress(s) {
+    const full = s.phase === 'rest' ? s.restDuration : s.roundDuration;
+    if (!full || full <= 0) return 0;
+    return Math.max(0, Math.min(1, s.timeRemaining / full));
+  }
+  if (typeof module !== 'undefined' && module.exports) module.exports = { roundProgress };
+  root.roundProgress = roundProgress;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
 ```
 
-Lives in `lib/` (alongside the other shared helpers) so it is unit-testable
-without restructuring the monolithic `public/js/app.js`. Loaded by both `app.js`
-and the test.
+Must live under `public/js/` — **not** `lib/` — because Vercel serves only
+`public/` to the browser (`vercel.json` `outputDirectory: "public"`); `lib/` is
+server-side only and `app.js` could never load it. UMD form so the browser loads
+it via `<script>` (sets `window.roundProgress`) and `test/progress.test.js`
+`require()`s it (`module.exports`). No DOM, no deps — keeps it unit-testable
+without restructuring the monolithic `app.js`.
+
+Wiring: add `<script src="/js/progress.js?v=NN"></script>` **before** the
+`app.js` tag in `index.html`, and add `/js/progress.js` to the `ASSETS` precache
+list in `public/sw.js`.
 
 ### 4. Depletion / freeze logic (`public/js/app.js`)
 
@@ -150,9 +160,10 @@ it off until they toggle it.
 
 ## Testing
 
-- **Unit (`test/progress.test.js`, `node:test`):** `roundProgress()` — fight
-  fraction, rest fraction, clamp at 1 (full) and 0 (empty), `timeRemaining > full`
-  clamps to 1, zero/negative-duration guard returns 0.
+- **Unit (`test/progress.test.js`, `node:test`):** `require('../public/js/progress.js')`
+  then test `roundProgress()` — fight fraction, rest fraction, clamp at 1 (full)
+  and 0 (empty), `timeRemaining > full` clamps to 1, negative clamps to 0,
+  zero-duration guard returns 0 (no divide-by-zero).
 - **Manual:** browser verification of the depletion animation, pause-freeze,
   phase color change, and panel-visibility gating; before/after screenshot.
 
@@ -164,10 +175,10 @@ hook enforces this.
 
 ## Files touched
 
-- `public/index.html` — progress markup; `?v=` bump
+- `public/js/progress.js` — new UMD pure helper (`roundProgress`)
+- `public/index.html` — progress markup; `progress.js` script tag; `?v=` bump
 - `public/css/main.css` — bar styles
-- `public/js/app.js` — `applyProgress`, `showRound` default, rest-round label; `?v=` bump
-- `public/sw.js` — `CACHE_NAME` bump
-- `party/main.js` — `showRound` default (×2)
-- `lib/progress.js` — new pure helper
+- `public/js/app.js` — `applyProgress`, `timerPanelActive`, `showRound` default, rest-round label; `?v=` bump
+- `public/sw.js` — add `/js/progress.js` to `ASSETS`; `CACHE_NAME` bump
+- `party/main.js` — `showRound` default (×2: `DEFAULT_SETTINGS`, `_newTimerState`)
 - `test/progress.test.js` — new unit tests
