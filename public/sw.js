@@ -1,6 +1,6 @@
 // public/sw.js — BJJ Mat Timer Service Worker
 // Provides offline caching and last-known-state preservation.
-const CACHE_NAME  = 'bjj-timer-v38';
+const CACHE_NAME  = 'bjj-timer-v39';
 const STATE_KEY   = 'bjj-last-state';
 const ASSETS = [
   '/',
@@ -8,6 +8,7 @@ const ASSETS = [
   '/manifest.json',
   '/css/main.css',
   '/js/app.js',
+  '/js/progress.js',
   '/js/spotify.js',
   '/spotify-config.js',
   '/supabase.js',
