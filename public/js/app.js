@@ -2078,22 +2078,40 @@ function applyControllerStateSnapshot(s, { silent = false } = {}) {
       if (s.timeRemaining <= 3) SOUND_THEMES[soundTheme].accentBeep();
       else                      SOUND_THEMES[soundTheme].countdownBeep();
     }
+    // Spotify auto pause/resume (coach controller only; no-op unless connected
+    // + enabled). Fire-and-forget so a slow/failed Spotify call never blocks the
+    // timer. See public/js/spotify.js.
+    const sp = (mode === 'controller' && window.spotifyEnabled?.()) ? window : null;
+    const spOpts = sp ? window.spotifyOpts() : null;
+
     // Fight → rest
     if (prevPhase === 'fight' && s.phase === 'rest') {
       if (buzzerOn) { const pc = playCustomAudio('stop'); if (!pc) SOUND_THEMES[soundTheme].buzzerSound(); }
       const pr = playCustomAudio('rest'); if (!pr) SOUND_THEMES[soundTheme].restSound();
+      if (sp && spOpts.pauseRest) sp.spotifyPause();
     }
     // Rest → fight (start of new round)
     if (prevPhase === 'rest' && s.phase === 'fight') {
       const ps = playCustomAudio('start'); if (!ps) SOUND_THEMES[soundTheme].startSound();
+      if (sp) sp.spotifyResume();
     }
     // Fight → fight, new round with no rest period
     if (prevPhase === 'fight' && s.phase === 'fight' && s.currentRound > prevRound && prevRunning) {
       const ps = playCustomAudio('start'); if (!ps) SOUND_THEMES[soundTheme].startSound();
+      if (sp) sp.spotifyResume();
     }
     // Timer fully ended (fight, last round, running→stopped)
     if (prevRunning && !s.running && s.timeRemaining === 0) {
       if (buzzerOn) { const pc = playCustomAudio('stop'); if (!pc) SOUND_THEMES[soundTheme].buzzerSound(); }
+      if (sp && spOpts.pauseEnd) sp.spotifyPause();
+    }
+    // Manual pause mid-round (coach paused the timer, round not over)
+    if (prevRunning && !s.running && s.timeRemaining > 0) {
+      if (sp && spOpts.pauseManual) sp.spotifyPause();
+    }
+    // Timer started/resumed (first start or resume after a manual pause)
+    if (!prevRunning && s.running) {
+      if (sp) sp.spotifyResume();
     }
   }
 
@@ -2105,6 +2123,7 @@ function openSettingsModal() {
   document.getElementById('settingsModal').style.display = 'flex';
   const sel = document.getElementById('soundThemeSelect');
   if (sel) sel.value = soundTheme;
+  window.spotifyRefreshUi?.();
 }
 function closeSettingsModal(e) {
   if (e && e.target !== document.getElementById('settingsModal')) return;

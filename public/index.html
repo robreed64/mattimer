@@ -15,6 +15,8 @@
 <script src="/supabase-config.js"></script>
 <script src="/supabase.js"></script>
 <script src="/partykit-config.js"></script>
+<script src="/spotify-config.js"></script>
+<script src="/js/spotify.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <link rel="stylesheet" href="/css/main.css?v=35">
@@ -616,6 +618,20 @@
         <button class="btn btn-outline" style="width:100%;font-size:.85rem;margin-top:.5rem" onclick="sendMsg()">Send to Displays</button>
       </div>
 
+      <!-- Spotify -->
+      <div class="modal-field" id="spotifyField">
+        <label>Spotify (Premium)</label>
+        <button class="btn btn-outline" id="spotifyConnectBtn" style="width:100%;font-size:.85rem" onclick="spotifyConnect()">Connect Spotify</button>
+        <div id="spotifyConnected" style="display:none">
+          <div id="spotifyStatus" style="font-size:.78rem;color:var(--mat-text-dim);margin-bottom:.6rem">Connected</div>
+          <div class="toggle-row"><span>Auto pause/resume music</span><label class="toggle"><input type="checkbox" id="spotifyEnableToggle" onchange="spotifySetEnabled(this.checked)"><span class="toggle-slider"></span></label></div>
+          <div class="toggle-row"><span>Pause at end of round</span><label class="toggle"><input type="checkbox" id="spotifyPauseRestToggle" checked onchange="spotifySaveOpts()"><span class="toggle-slider"></span></label></div>
+          <div class="toggle-row"><span>Pause at session end</span><label class="toggle"><input type="checkbox" id="spotifyPauseEndToggle" checked onchange="spotifySaveOpts()"><span class="toggle-slider"></span></label></div>
+          <div class="toggle-row"><span>Pause when timer paused</span><label class="toggle"><input type="checkbox" id="spotifyPauseManualToggle" checked onchange="spotifySaveOpts()"><span class="toggle-slider"></span></label></div>
+          <button class="btn btn-outline" style="width:100%;font-size:.8rem;margin-top:.6rem" onclick="spotifyDisconnect()">Disconnect Spotify</button>
+        </div>
+      </div>
+
       <!-- Sounds -->
       <div class="modal-field">
         <label>Sounds</label>
@@ -814,7 +830,7 @@
   </div>
 </div>
 
-<script src="/js/app.js?v=35"></script>
+<script src="/js/app.js?v=36"></script>
 
 </body>
 </html>
