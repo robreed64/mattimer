@@ -1,0 +1,35 @@
+#!/bin/sh
+# Enforce the PWA cache-version lockstep rule (see CLAUDE.md):
+# any staged change under public/ must bump all three asset versions together,
+# and they must match: CACHE_NAME in public/sw.js, ?v= on css + app.js in index.html.
+# Bypass with `git commit --no-verify` if you really mean to skip it.
+
+staged_public=$(git diff --cached --name-only -- public/)
+[ -z "$staged_public" ] && exit 0
+
+staged() { git show ":$1" 2>/dev/null; }
+
+cache=$(staged public/sw.js     | grep -oE "bjj-timer-v[0-9]+"  | head -1 | grep -oE "[0-9]+")
+css=$(staged   public/index.html | grep -oE "main\.css\?v=[0-9]+" | head -1 | grep -oE "[0-9]+$")
+js=$(staged    public/index.html | grep -oE "app\.js\?v=[0-9]+"   | head -1 | grep -oE "[0-9]+$")
+
+fail() {
+  echo "pre-commit: PWA cache-version lockstep violation" >&2
+  echo "  $1" >&2
+  echo "  CACHE_NAME=v${cache:-?}  main.css?v=${css:-?}  app.js?v=${js:-?}" >&2
+  echo "  Fix public/sw.js + public/index.html, or bypass with --no-verify." >&2
+  exit 1
+}
+
+[ -n "$cache" ] && [ -n "$css" ] && [ -n "$js" ] || fail "could not read all three versions"
+{ [ "$cache" = "$css" ] && [ "$css" = "$js" ]; } || fail "the three versions are not equal"
+
+# Require the version to actually be bumped vs the last commit when public/ changed.
+if git rev-parse --verify -q HEAD >/dev/null; then
+  head_cache=$(git show HEAD:public/sw.js 2>/dev/null | grep -oE "bjj-timer-v[0-9]+" | head -1 | grep -oE "[0-9]+")
+  if [ -n "$head_cache" ] && [ "$cache" = "$head_cache" ]; then
+    fail "public/ changed but cache version (v$cache) was not bumped vs HEAD"
+  fi
+fi
+
+exit 0
