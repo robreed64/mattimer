@@ -542,8 +542,10 @@ export default class BjjTimerServer {
         const allowed = ['roundDuration','restDuration','totalRounds','warningEnabled','warningThreshold','showRound'];
         for (const k of allowed) { if (msg[k] !== undefined) ts[k] = msg[k]; }
         if (!ts.running) {
-          // Clamp paused position if roundDuration shrank below it; never unconditionally reset
-          if (ts.timeRemaining > ts.roundDuration) ts.timeRemaining = ts.roundDuration;
+          // When duration changes while paused, sync timeRemaining to the new duration
+          if (msg.roundDuration !== undefined && msg.roundDuration !== prevRound) {
+            ts.timeRemaining = ts.roundDuration;
+          }
           ts.startedAt = null; ts.timeRemainingAtStart = 0;
         } else if (msg.roundDuration !== undefined && msg.roundDuration !== prevRound && ts.phase === 'fight') {
           // Changing the round length while a fight round is running restarts the
