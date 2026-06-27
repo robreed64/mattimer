@@ -158,7 +158,7 @@
   .display-corner { position: absolute; font-family: var(--font-ui); font-size: .75rem; letter-spacing: .25em; color: rgba(255,255,255,.4); text-transform: uppercase; }
   .display-corner.tl { top: 1.5rem; left: 1.5rem; }
   .display-corner.tr { top: 1.5rem; right: 1.5rem; display: flex; align-items: center; gap: .4rem; }
-  .display-round { font-family: var(--font-ui); font-size: clamp(1rem,2.5vw,1.4rem); letter-spacing: .5em; color: rgba(255,255,255,.8); text-transform: uppercase; margin-bottom: .5rem; }
+  .display-round { font-family: var(--font-ui); font-size: clamp(1rem,2.5vw,1.4rem); letter-spacing: .5em; color: rgba(255,255,255,.8); text-transform: uppercase; margin-bottom: .5rem; text-align: center; padding-left: .5em; }
   .display-phase { font-family: var(--font-ui); font-size: clamp(1.2rem,3vw,1.8rem); letter-spacing: .4em; text-transform: uppercase; margin-bottom: 1rem; transition: color .5s; }
   .display-phase.fight { color: #fff; }
   .display-phase.rest { color: #fff; }
