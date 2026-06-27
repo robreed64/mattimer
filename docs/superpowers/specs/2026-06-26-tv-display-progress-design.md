@@ -4,14 +4,23 @@
 **Status:** Approved (design)
 **Scope:** TV display view only (`#display` / `#displayInner` in `public/index.html`)
 
+## Revision 2026-06-26 — bar moved under the time
+
+The original thin (12px) full-width bottom bar was too small to read from across
+a gym. Replaced with a **thick, rounded bar centered directly under the
+countdown**, inside `#displayPanelTimer`. The depletion engine (`applyProgress` +
+`roundProgress`), phase colors, semantics, and round indicator are unchanged —
+this revision is markup + CSS only. Sections 1 and 2 below reflect the revised
+form; the depletion logic in sections 3–5 is unchanged.
+
 ## Goal
 
 Make the wall-TV countdown readable at a glance from across a noisy gym, where
 students are 30–40 ft away and can't parse the digits mid-roll. Two additions:
 
-1. A **full-width progress bar** along the bottom edge of the display that
-   depletes as the current phase (fight round or rest) counts down, colored by
-   phase (red fight / green rest).
+1. A **thick progress bar centered under the countdown** that depletes as the
+   current phase (fight round or rest) counts down, colored by phase (red fight /
+   green rest). (Originally a thin bottom-edge bar; see Revision above.)
 2. A **round indicator** ("Round 2 of 5") shown by default, so everyone on the
    mat knows where they are in the class.
 
@@ -23,7 +32,8 @@ current phase only).
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Indicator form | Full-width bar at the bottom edge | Largest horizontal motion, most readable at distance, no competition with the time |
+| Indicator form | Thick rounded bar centered under the countdown (revised from bottom edge) | A 12px bottom bar was unreadable at distance; under the number, near where eyes are, at ~2× height reads across a gym |
+| Depletion origin | Left-origin (drains right→left) | Matches convention; reuses existing applyProgress unchanged |
 | Progress semantics | Current phase only (resets each round/rest) | The actionable question is "how much of *this* round is left" |
 | Animation | CSS `transform: scaleX()` transition (GPU-composited) | Smooth, near-free, decoupled from the number's throttled rAF repaint |
 | Round indicator | Respect existing `showRound` setting, default flipped to ON | Backward-compatible; owners can still hide it |
@@ -31,25 +41,28 @@ current phase only).
 
 ## Components
 
-### 1. Markup (`public/index.html`, inside `#displayInner`)
+### 1. Markup (`public/index.html`, inside `#displayPanelTimer`, right after `#displayTime`)
 
 ```html
-<div class="display-progress" id="displayProgress">
+<div class="display-time" id="displayTime">5:00</div>
+<div class="display-progress" id="displayProgress" style="display:none">
   <div class="display-progress-fill" id="displayProgressFill"></div>
 </div>
 ```
 
-`#displayInner` is already `position: relative`, so the bar absolutely-positions
-to the bottom edge. The wall clock (`bottom: 1.25rem`) and QR sit above it — no
-overlap.
+The bar is an in-flow child of the centered timer column, directly under the
+number. Living inside `#displayPanelTimer` means it is automatically hidden on
+the stopwatch tab and idle-clock views (the panel hides), in addition to the
+`applyProgress` visibility gate.
 
 ### 2. CSS (`public/css/main.css`)
 
 ```css
-.display-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 12px;
-  background: rgba(255,255,255,.06); z-index: 1; }
+.display-progress { width: min(62%, 900px); height: clamp(16px, 2.6vh, 30px);
+  margin-top: clamp(1rem, 3.5vh, 2.75rem); background: rgba(255,255,255,.10);
+  border-radius: 999px; overflow: hidden; }
 .display-progress-fill { height: 100%; width: 100%; transform-origin: left;
-  transform: scaleX(1); background: var(--mat-red); }
+  transform: scaleX(1); background: var(--mat-red); border-radius: 999px; }
 .display-inner.phase-rest .display-progress-fill { background: var(--go-color); }
 
 @media (prefers-reduced-motion: reduce) {
