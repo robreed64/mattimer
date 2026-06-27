@@ -19,7 +19,7 @@
 <script src="/js/spotify.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="/css/main.css?v=42">
+<link rel="stylesheet" href="/css/main.css?v=43">
 </head>
 <body>
 
@@ -724,12 +724,14 @@
     </button>
 
     <div id="displayPanelTimer">
+      <svg class="display-ring" id="displayRing" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet" style="display:none">
+        <path class="display-ring-track" d="M500 30 A470 250 0 1 1 500 530 A470 250 0 1 1 500 30 Z"/>
+        <path class="display-ring-prog" id="displayRingProg" d="M500 30 A470 250 0 1 1 500 530 A470 250 0 1 1 500 30 Z"
+              pathLength="100" stroke-dasharray="100" stroke-dashoffset="0"/>
+      </svg>
       <div class="display-round" id="displayRound" style="display:none">Round 1 of 3</div>
       <div class="display-phase fight" id="displayPhase">FIGHT</div>
       <div class="display-time" id="displayTime">5:00</div>
-      <div class="display-progress" id="displayProgress" style="display:none">
-        <div class="display-progress-fill" id="displayProgressFill"></div>
-      </div>
     </div>
 
     <!-- Idle screen clock — shown when enabled and no class is running this mat -->
@@ -833,8 +835,8 @@
   </div>
 </div>
 
-<script src="/js/progress.js?v=42"></script>
-<script src="/js/app.js?v=42"></script>
+<script src="/js/progress.js?v=43"></script>
+<script src="/js/app.js?v=43"></script>
 
 </body>
 </html>

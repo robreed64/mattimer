@@ -4,23 +4,53 @@
 **Status:** Approved (design)
 **Scope:** TV display view only (`#display` / `#displayInner` in `public/index.html`)
 
-## Revision 2026-06-26 — bar moved under the time
+## Revision 2 (2026-06-26) — oval ring around the clock (current)
 
-The original thin (12px) full-width bottom bar was too small to read from across
-a gym. Replaced with a **thick, rounded bar centered directly under the
-countdown**, inside `#displayPanelTimer`. The depletion engine (`applyProgress` +
-`roundProgress`), phase colors, semantics, and round indicator are unchanged —
-this revision is markup + CSS only. Sections 1 and 2 below reflect the revised
-form; the depletion logic in sections 3–5 is unchanged.
+The under-time bar still read too small from across a gym. **Superseded** by a
+bold **oval (ellipse) progress ring encircling the countdown** — chosen from
+rendered mockups (oval-bold variant). This is the current design; Revision 1 and
+Sections 1–2 below describe the now-replaced bar form.
+
+- **Form:** an SVG oval ring around the phase label + time, ~30px stroke, red in
+  fight / green in rest. Fixed `viewBox="0 0 1000 560"` bakes the oval shape so
+  uniform scaling keeps the stroke even; `pathLength="100"` makes the depletion
+  math geometry-independent. **The oval is a `<path>`, not an `<ellipse>` + CSS
+  rotate** — rotating a non-circular ellipse 90° swaps its axes (caught in visual
+  verification), so the path is drawn starting at top-center, clockwise, which
+  also gives the 12-o'clock depletion start for free.
+- **Markup** (first child of `#displayPanelTimer`, behind the text):
+  ```html
+  <svg class="display-ring" id="displayRing" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet" style="display:none">
+    <path class="display-ring-track" d="M500 30 A470 250 0 1 1 500 530 A470 250 0 1 1 500 30 Z"/>
+    <path class="display-ring-prog" id="displayRingProg" d="M500 30 A470 250 0 1 1 500 530 A470 250 0 1 1 500 30 Z"
+          pathLength="100" stroke-dasharray="100" stroke-dashoffset="0"/>
+  </svg>
+  ```
+- **CSS:** `.display-ring { position:absolute; width:min(82vw,1150px); aspect-ratio:1000/560; top:50%; left:50%; transform:translate(-50%,-50%); z-index:0; pointer-events:none; overflow:visible; }`
+  `.display-ring-track { fill:none; stroke:rgba(255,255,255,.10); stroke-width:30; }`
+  `.display-ring-prog { fill:none; stroke:var(--mat-red); stroke-width:30; stroke-linecap:round; }` (no CSS rotate — the path already starts at top)
+  `.display-inner.phase-rest .display-ring-prog { stroke:var(--go-color); }`
+  plus the `prefers-reduced-motion` rule. The display text sits at higher z-index,
+  inside the oval. Centered on the panel, scales with the viewport.
+- **Depletion (`applyProgress`):** same freeze/deplete structure as the bar, but
+  drives `strokeDashoffset` instead of `transform: scaleX`. Seed
+  `strokeDashoffset = 100 * (1 - roundProgress(s))` with no transition (freeze),
+  force reflow, then if running transition `stroke-dashoffset` to `100` (empty)
+  over `timeRemaining` seconds, linear. Starts full at 12 o'clock (the path's
+  start point), depletes clockwise.
+- **Unchanged:** `roundProgress` (the fraction math), `timerPanelActive` gating,
+  the round indicator, phase semantics. So `test/progress.test.js` stays valid;
+  no new unit tests. The bar markup and `.display-progress*` CSS are removed.
 
 ## Goal
 
 Make the wall-TV countdown readable at a glance from across a noisy gym, where
 students are 30–40 ft away and can't parse the digits mid-roll. Two additions:
 
-1. A **thick progress bar centered under the countdown** that depletes as the
-   current phase (fight round or rest) counts down, colored by phase (red fight /
-   green rest). (Originally a thin bottom-edge bar; see Revision above.)
+1. A **progress indicator** that depletes as the current phase (fight round or
+   rest) counts down, colored by phase (red fight / green rest). **Current form:
+   a bold oval ring around the clock** (see Revision 2). Earlier forms — a
+   bottom-edge bar, then a thick under-time bar — were too small at distance.
 2. A **round indicator** ("Round 2 of 5") shown by default, so everyone on the
    mat knows where they are in the class.
 
