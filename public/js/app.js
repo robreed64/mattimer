@@ -2478,19 +2478,19 @@ function timerPanelActive() {
 // current fraction. Seeds from the same timeRemaining as the number, so the two
 // stay in sync without touching the throttled rAF interpolation loop.
 function applyProgress(s) {
-  const wrap = document.getElementById('displayProgress');
-  const fill = document.getElementById('displayProgressFill');
-  if (!wrap || !fill) return;
+  const ring = document.getElementById('displayRing');
+  const prog = document.getElementById('displayRingProg');
+  if (!ring || !prog) return;
   const full = s.phase === 'rest' ? s.restDuration : s.roundDuration;
-  if (!timerPanelActive() || !full || full <= 0) { wrap.style.display = 'none'; return; }
-  wrap.style.display = '';
+  if (!timerPanelActive() || !full || full <= 0) { ring.style.display = 'none'; return; }
+  ring.style.display = '';
   const frac = roundProgress(s);
-  fill.style.transition = 'none';            // freeze at the current fraction
-  fill.style.transform  = 'scaleX(' + frac + ')';
-  void fill.offsetWidth;                       // force reflow so the transition starts from frac
+  prog.style.transition = 'none';                          // freeze at the current fraction
+  prog.style.strokeDashoffset = String(100 * (1 - frac));  // visible arc = frac of the ring
+  void prog.getBoundingClientRect();                        // force reflow so the transition starts here
   if (s.running && s.timeRemaining > 0) {
-    fill.style.transition = 'transform ' + s.timeRemaining + 's linear';
-    fill.style.transform  = 'scaleX(0)';       // deplete to empty over the remaining time
+    prog.style.transition = 'stroke-dashoffset ' + s.timeRemaining + 's linear';
+    prog.style.strokeDashoffset = '100';                    // deplete to empty over the remaining time
   }
 }
 
