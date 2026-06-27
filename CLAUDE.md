@@ -16,6 +16,9 @@ standing rules and gotchas that aren't obvious from the code.
 only deploys the frontend.** Anything touching the room protocol usually needs
 *both* deployed, frontend and party, ideally together.
 
+To test `party/` changes off-production, deploy to a staging party and point your
+browser at it — see `docs/partykit-staging.md`.
+
 ## Editing anything in `public/` → bump three versions in lockstep
 
 `public/sw.js` caches the app shell aggressively; stale PWA clients (esp. iOS
