@@ -168,12 +168,17 @@
   .display-analog .clock-face { fill: #fff; stroke: rgba(0,0,0,.15); stroke-width: 2; }
   .display-analog .clock-tick { stroke: rgba(0,0,0,.45); stroke-width: 2; }
   .display-analog .clock-tick.major { stroke: rgba(0,0,0,.85); stroke-width: 4; }
-  .display-analog .clock-number { font-family: var(--font-ui); font-size: 14px; fill: rgba(0,0,0,.75); text-anchor: middle; dominant-baseline: central; }
   .display-analog .clock-hand { stroke: #1a1a1a; stroke-linecap: round; }
   .display-analog .clock-hand.hour { stroke-width: 6; }
   .display-analog .clock-hand.min  { stroke-width: 4; }
   .display-analog .clock-hand.sec  { stroke: var(--mat-gold); stroke-width: 2; }
   .display-analog .clock-cap { fill: var(--mat-gold); }
+  .display-analog .clock-label circle { stroke: #fff; stroke-width: 2; }
+  .display-analog .clock-label.hour circle { fill: #1a1a1a; }
+  .display-analog .clock-label.min  circle { fill: var(--mat-gold); }
+  .display-analog .clock-label text { font-family: var(--font-ui); font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+  .display-analog .clock-label.hour text { font-size: 14px; fill: #fff; }
+  .display-analog .clock-label.min  text { font-size: 12px; fill: #1a1a1a; }
   .display-time.warning { color: var(--warning-color); }
   .display-time.danger { color: var(--danger-color); animation: flash-red .5s infinite; }
   .display-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity .3s; }

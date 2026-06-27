@@ -19,7 +19,7 @@
 <script src="/js/spotify.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="/css/main.css?v=43">
+<link rel="stylesheet" href="/css/main.css?v=44">
 </head>
 <body>
 
@@ -739,11 +739,13 @@
     <svg class="display-analog" id="displayAnalogClock" viewBox="0 0 200 200" style="display:none">
       <circle class="clock-face" cx="100" cy="100" r="96"/>
       <g id="acTicks"></g>
-      <g id="acNumbers"></g>
       <line class="clock-hand hour" id="acHour" x1="100" y1="100" x2="100" y2="54"/>
       <line class="clock-hand min"  id="acMin"  x1="100" y1="100" x2="100" y2="34"/>
       <line class="clock-hand sec"  id="acSec"  x1="100" y1="100" x2="100" y2="28"/>
       <circle class="clock-cap" cx="100" cy="100" r="5"/>
+      <!-- Numbers ride the hand tips: hour at end of hour hand, minute at end of minute hand -->
+      <g id="acHourLabel" class="clock-label hour"><circle r="13"/><text id="acHourNum"></text></g>
+      <g id="acMinLabel" class="clock-label min"><circle r="11"/><text id="acMinNum"></text></g>
     </svg>
 
     <div id="displayPanelStopwatch" style="display:none;flex-direction:column;align-items:center">
@@ -835,8 +837,8 @@
   </div>
 </div>
 
-<script src="/js/progress.js?v=43"></script>
-<script src="/js/app.js?v=43"></script>
+<script src="/js/progress.js?v=44"></script>
+<script src="/js/app.js?v=44"></script>
 
 </body>
 </html>

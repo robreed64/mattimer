@@ -2505,7 +2505,8 @@ function _updateBigClock() {
   el.innerHTML = `${h}:${min}<span style="font-size:.4em;opacity:.6;letter-spacing:.05em"> ${ampm}</span>`;
 }
 
-// Build the 12 hour ticks once (major marks at 12/3/6/9).
+// Build the 12 hour ticks once (major marks at 12/3/6/9). No rim numbers — the
+// hour and minute numbers ride the hand tips instead (see _updateAnalogClock).
 function _buildAnalogTicks() {
   const g = document.getElementById('acTicks');
   if (g && !g.childElementCount) {
@@ -2520,20 +2521,6 @@ function _buildAnalogTicks() {
       ln.setAttribute('y2', (100 - inner * Math.cos(ang)).toFixed(2));
       ln.setAttribute('class', 'clock-tick' + (i % 3 === 0 ? ' major' : ''));
       g.appendChild(ln);
-    }
-  }
-  const numG = document.getElementById('acNumbers');
-  if (numG && !numG.childElementCount) {
-    const ns = 'http://www.w3.org/2000/svg';
-    const r = 68;
-    for (let h = 1; h <= 12; h++) {
-      const ang = h * 30 * Math.PI / 180;
-      const t = document.createElementNS(ns, 'text');
-      t.setAttribute('x', (100 + r * Math.sin(ang)).toFixed(2));
-      t.setAttribute('y', (100 - r * Math.cos(ang)).toFixed(2));
-      t.setAttribute('class', 'clock-number');
-      t.textContent = h;
-      numG.appendChild(t);
     }
   }
 }
@@ -2551,6 +2538,19 @@ function _updateAnalogClock() {
   rot('acHour', (h % 12 + m / 60) * 30);
   rot('acMin',  (m + s / 60) * 6);
   rot('acSec',  s * 6);
+  // Position the number badges at the hand tips (group is only translated, never
+  // rotated, so the digits stay upright). Radii match the hand lengths.
+  const place = (id, deg, r, text) => {
+    const grp = document.getElementById(id);
+    if (!grp) return;
+    const a = (deg - 90) * Math.PI / 180;          // 0deg = 12 o'clock
+    const x = 100 + r * Math.cos(a), y = 100 + r * Math.sin(a);
+    grp.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+    const t = grp.querySelector('text');
+    if (t) t.textContent = text;
+  };
+  place('acHourLabel', (h % 12 + m / 60) * 30, 80, h % 12 || 12); // out by the hour ticks
+  place('acMinLabel',  (m + s / 60) * 6,       66, m);            // just inside, at the minute-hand tip
 }
 function openBrandingModal() {
   document.getElementById('bName').value     = branding.appName || '';
