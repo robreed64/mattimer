@@ -19,7 +19,7 @@
 <script src="/js/spotify.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="/css/main.css?v=46">
+<link rel="stylesheet" href="/css/main.css?v=47">
 </head>
 <body>
 
@@ -636,6 +636,15 @@
       <!-- Sounds -->
       <div class="modal-field">
         <label>Sounds</label>
+        <div class="modal-field" style="margin-bottom:.8rem">
+          <label style="display:flex;justify-content:space-between;gap:.5rem">
+            <span>Volume</span>
+            <span id="volumePct">100%</span>
+          </label>
+          <input type="range" id="volumeSlider" min="0" max="2" step="0.05" value="1"
+            oninput="setMasterVolume(this.value)"
+            style="width:100%;accent-color:var(--mat-gold);cursor:pointer">
+        </div>
         <div class="toggle-row" style="margin-bottom:.6rem">
           <span>Sound Theme</span>
           <select id="soundThemeSelect" onchange="setSoundTheme(this.value)"
@@ -723,6 +732,20 @@
         <line x1="21" y1="12" x2="9" y2="12"/>
       </svg>
     </button>
+
+    <div id="tvVolumeBtn" onclick="toggleTvVolume()" title="Volume"
+      style="position:fixed;top:12px;left:12px;z-index:10;cursor:pointer;opacity:.2;font-size:1.25rem;user-select:none;transition:opacity .2s;padding:2px"
+      onmouseover="this.style.opacity='.4'" onmouseout="this.style.opacity='.2'">
+      🔊
+    </div>
+    <div id="tvVolumePanel" style="display:none;position:fixed;top:50px;left:12px;z-index:10;background:rgba(13,13,13,.9);border:1px solid rgba(212,160,23,.3);border-radius:6px;padding:.6rem .75rem;width:200px;backdrop-filter:blur(4px)">
+      <div style="font-family:var(--font-ui);font-size:.8rem;color:var(--mat-muted);margin-bottom:.5rem;display:flex;justify-content:space-between;letter-spacing:.04em;font-weight:600">
+        <span>VOLUME</span><span id="tvVolumePct">100%</span>
+      </div>
+      <input type="range" id="tvVolumeSlider" min="0" max="2" step="0.05" value="1"
+        oninput="setMasterVolume(this.value)"
+        style="width:100%;accent-color:var(--mat-gold);cursor:pointer;height:4px">
+    </div>
 
     <div id="displayPanelTimer">
       <svg class="display-ring" id="displayRing" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet" style="display:none">
@@ -913,8 +936,8 @@
   </div>
 </div>
 
-<script src="/js/progress.js?v=46"></script>
-<script src="/js/app.js?v=46"></script>
+<script src="/js/progress.js?v=47"></script>
+<script src="/js/app.js?v=47"></script>
 
 </body>
 </html>

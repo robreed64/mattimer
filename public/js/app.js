@@ -1152,6 +1152,21 @@ const VALID_THEMES = new Set(['classic', 'bell', 'digital', 'minimal']);
 let soundTheme = VALID_THEMES.has(localStorage.getItem('mattimer_sound_theme'))
   ? localStorage.getItem('mattimer_sound_theme') : 'classic';
 function setSoundTheme(t) { soundTheme = t; localStorage.setItem('mattimer_sound_theme', t); }
+
+let masterVolume = parseFloat(localStorage.getItem('mattimer_volume') ?? '1') || 1;
+function setMasterVolume(v) {
+  masterVolume = Math.max(0, Math.min(2, parseFloat(v) || 1));
+  localStorage.setItem('mattimer_volume', masterVolume);
+  const el = document.getElementById('volumeSlider');
+  if (el && parseFloat(el.value) !== masterVolume) el.value = masterVolume;
+  const pct = document.getElementById('volumePct');
+  if (pct) pct.textContent = Math.round(masterVolume * 100) + '%';
+  const tvEl = document.getElementById('tvVolumeSlider');
+  if (tvEl && parseFloat(tvEl.value) !== masterVolume) tvEl.value = masterVolume;
+  const tvPct = document.getElementById('tvVolumePct');
+  if (tvPct) tvPct.textContent = Math.round(masterVolume * 100) + '%';
+}
+
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -1162,7 +1177,7 @@ function beep(freq, dur, type='sine', vol=0.6, delay=0) {
   const osc = ctx.createOscillator(), gain = ctx.createGain();
   osc.connect(gain); gain.connect(ctx.destination);
   osc.type = type; osc.frequency.setValueAtTime(freq, t);
-  gain.gain.setValueAtTime(vol, t);
+  gain.gain.setValueAtTime(vol * masterVolume, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
   osc.start(t); osc.stop(t + dur + 0.05);
 }
@@ -1281,11 +1296,27 @@ function previewCustomAudio(slot) {
 function playCustomAudio(slot) {
   if (!customAudio[slot]?.url) return false;
   getAudioCtx();
-  new Audio(customAudio[slot].url).play().catch(() => {});
+  const audio = new Audio(customAudio[slot].url);
+  audio.volume = Math.min(1, masterVolume);
+  audio.play().catch(() => {});
   return true;
 }
 
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+let _tvVolumeTimeout = null;
+function toggleTvVolume() {
+  const panel = document.getElementById('tvVolumePanel');
+  if (!panel) return;
+  const isShowing = panel.style.display !== 'none';
+  panel.style.display = isShowing ? 'none' : '';
+  clearTimeout(_tvVolumeTimeout);
+  if (!isShowing) {
+    _tvVolumeTimeout = setTimeout(() => {
+      if (panel.style.display !== 'none') panel.style.display = 'none';
+    }, 4000);
+  }
+}
 
 function restoreAudioSlots(audioSlots) {
   if (!audioSlots) return;
@@ -2773,6 +2804,7 @@ function updateBrandPreview() {
 }
 document.addEventListener('DOMContentLoaded', () => {
   ['bName','bTagline'].forEach(id => { const el=document.getElementById(id); if(el) el.addEventListener('input',updateBrandPreview); });
+  setMasterVolume(masterVolume);
 });
 async function saveBranding() {
   const logoInput = document.getElementById('logoUpload');
