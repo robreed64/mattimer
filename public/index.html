@@ -19,7 +19,7 @@
 <script src="/js/spotify.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="/css/main.css?v=45">
+<link rel="stylesheet" href="/css/main.css?v=46">
 </head>
 <body>
 
@@ -516,7 +516,8 @@
       <div class="ctrl-tabs">
         <button class="ctrl-tab active" id="tabTimer" onclick="switchTab('timer')">⏱ Round Timer</button>
         <button class="ctrl-tab" id="tabStopwatch" onclick="switchTab('stopwatch')">⏲ Stopwatch</button>
-        <button class="ctrl-tab" onclick="openSettingsModal()" style="margin-left:auto">⚙ Settings</button>
+        <button class="ctrl-tab" onclick="openTemplatesModal()" style="margin-left:auto">📋 Templates</button>
+        <button class="ctrl-tab" onclick="openSettingsModal()">⚙ Settings</button>
       </div>
 
       <!-- Round Timer Panel -->
@@ -837,8 +838,83 @@
   </div>
 </div>
 
-<script src="/js/progress.js?v=45"></script>
-<script src="/js/app.js?v=45"></script>
+<!-- ─── TEMPLATES MODAL ──────────────────────────────────────────── -->
+<div id="templatesModal" class="modal-backdrop" style="display:none" onclick="closeTemplatesModal(event)">
+  <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">📋 Class Templates</span>
+      <button class="modal-close" onclick="closeTemplatesModal()">✕</button>
+    </div>
+
+    <!-- LIST VIEW -->
+    <div id="templateListView">
+      <div class="modal-body" style="gap:.75rem">
+        <div id="templateList" style="display:flex;flex-direction:column;gap:.5rem">
+          <!-- populated by renderTemplates() -->
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content:space-between">
+        <button class="btn btn-outline" onclick="closeTemplatesModal()">Close</button>
+        <button class="btn btn-gold" onclick="_showTemplateForm(null)">+ New Template</button>
+      </div>
+    </div>
+
+    <!-- CREATE/EDIT FORM VIEW (hidden initially) -->
+    <div id="templateFormView" style="display:none">
+      <div class="modal-body" style="gap:1rem">
+        <div class="modal-field">
+          <label>Template Name</label>
+          <input type="text" id="tplName" placeholder="e.g. Fundamentals · Long Rounds" maxlength="60"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1.05rem;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s;box-sizing:border-box"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+        </div>
+        <div class="modal-field">
+          <label>Round Duration (minutes)</label>
+          <input type="number" id="tplRoundMin" value="5" min="1" max="99"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+        </div>
+        <div class="modal-field">
+          <label>Rest Between Rounds (seconds)</label>
+          <input type="number" id="tplRest" value="60" min="0" max="600"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+        </div>
+        <div class="modal-field">
+          <label>Number of Rounds</label>
+          <input type="number" id="tplRounds" value="10" min="1" max="20"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+        </div>
+        <div class="modal-field">
+          <label>Display Options</label>
+          <div class="toggle-row">
+            <span>Enable countdown warning</span>
+            <label class="toggle"><input type="checkbox" id="tplWarningToggle" checked><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row">
+            <span>Show round counter on display</span>
+            <label class="toggle"><input type="checkbox" id="tplShowRound" checked><span class="toggle-slider"></span></label>
+          </div>
+        </div>
+        <div class="modal-field">
+          <label>Warn at (seconds remaining)</label>
+          <input type="number" id="tplWarningThreshold" value="30" min="5" max="120"
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box"
+            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content:space-between">
+        <button class="btn btn-outline" onclick="_showTemplateList()">← Back</button>
+        <button class="btn btn-gold" onclick="submitTemplateForm()">Save Template</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/js/progress.js?v=46"></script>
+<script src="/js/app.js?v=46"></script>
 
 </body>
 </html>

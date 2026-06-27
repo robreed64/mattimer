@@ -1309,6 +1309,10 @@ if (roomId) {
 let profiles = [];
 let _pendingProfile = null;
 
+// ─── CLASS TEMPLATES ──────────────────────────────────────────────
+let classTemplates = [];
+let _editingTemplateId = null;
+
 // Entry to running a timer: first pick which mat, then identify the coach.
 function promptControllerPassword() {
   openMatPicker();
@@ -1759,6 +1763,7 @@ function _onMessage(event) {
     case 'config': {
       tvCodes  = msg.tvCodes;
       branding = { ...branding, ...msg.branding };
+      if (Array.isArray(msg.classTemplates)) classTemplates = msg.classTemplates;
       if (msg.ctrlSlot)  myCtrlSlot = msg.ctrlSlot;
       if (Array.isArray(msg.mats) && msg.mats.length) myCtrlMats = msg.mats.slice();
       if (msg.ctrlColor) myCtrlColor = msg.ctrlColor;
@@ -1834,6 +1839,11 @@ function _onMessage(event) {
       break;
     }
     case 'profiles:updated': { profiles = msg.profiles || msg; break; }
+
+    case 'templates:updated': {
+      classTemplates = msg.classTemplates || [];
+      break;
+    }
 
     case 'audio:clear': {
       customAudio[msg.slot] = null;
@@ -2176,6 +2186,137 @@ function updateConfig() {
       },
     });
   }
+}
+
+// ─── CLASS TEMPLATES ──────────────────────────────────────────────
+
+function _templateSummary(t) {
+  const s = t.settings || {};
+  const mins = s.roundDuration ? (s.roundDuration / 60 % 1 === 0 ? s.roundDuration / 60 : (s.roundDuration / 60).toFixed(1)) : '?';
+  const rest = s.restDuration !== undefined ? s.restDuration + 's' : '?';
+  return `${s.totalRounds || '?'}×${mins}min / ${rest} rest`;
+}
+
+function renderTemplates() {
+  const list = document.getElementById('templateList');
+  if (!list) return;
+  if (!classTemplates.length) {
+    list.innerHTML = '<div style="font-family:var(--font-ui);font-size:.85rem;color:var(--mat-muted);text-align:center;padding:1rem 0">No templates yet — create one below</div>';
+    return;
+  }
+  list.innerHTML = classTemplates.map(t => `
+    <div style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;padding:.6rem .8rem;display:flex;align-items:center;gap:.5rem">
+      <div style="flex:1;min-width:0">
+        <div style="font-family:var(--font-ui);font-size:.9rem;font-weight:700;color:var(--mat-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(t.name)}</div>
+        <div style="font-family:var(--font-ui);font-size:.75rem;color:var(--mat-muted);letter-spacing:.04em">${escHtml(_templateSummary(t))}</div>
+      </div>
+      <div style="display:flex;gap:.35rem;flex-shrink:0">
+        <button class="btn btn-gold" style="font-size:.72rem;padding:.3rem .55rem" onclick="applyTemplate('${escHtml(t.id)}')">Load</button>
+        <button class="btn btn-outline" style="font-size:.72rem;padding:.3rem .55rem" onclick="_showTemplateForm(${JSON.stringify(t).replace(/"/g,'&quot;')})">Edit</button>
+        <button style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-size:.85rem;padding:.2rem .35rem;border-radius:3px" onclick="deleteTemplate('${escHtml(t.id)}')" title="Delete">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function _showTemplateList() {
+  _editingTemplateId = null;
+  renderTemplates();
+  document.getElementById('templateListView').style.display = '';
+  document.getElementById('templateFormView').style.display = 'none';
+}
+
+function _showTemplateForm(template) {
+  _editingTemplateId = template?.id || null;
+  const s = template?.settings || {};
+  const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const setC = (id, v) => { const el = document.getElementById(id); if (el) el.checked = v; };
+  document.getElementById('tplName').value = template?.name || '';
+  setV('tplRoundMin',         Math.round((s.roundDuration    ?? state.roundDuration)   / 60));
+  setV('tplRest',              s.restDuration   !== undefined ? s.restDuration   : state.restDuration);
+  setV('tplRounds',            s.totalRounds    !== undefined ? s.totalRounds    : state.totalRounds);
+  setC('tplWarningToggle',     s.warningEnabled !== undefined ? s.warningEnabled : state.warningEnabled);
+  setV('tplWarningThreshold',  s.warningThreshold !== undefined ? s.warningThreshold : state.warningThreshold);
+  setC('tplShowRound',         s.showRound      !== undefined ? s.showRound      : state.showRound);
+  document.getElementById('templateListView').style.display = 'none';
+  document.getElementById('templateFormView').style.display = '';
+  setTimeout(() => document.getElementById('tplName').focus(), 80);
+}
+
+function openTemplatesModal() {
+  _showTemplateList();
+  document.getElementById('templatesModal').style.display = 'flex';
+}
+
+function closeTemplatesModal(e) {
+  if (e && e.target !== document.getElementById('templatesModal')) return;
+  document.getElementById('templatesModal').style.display = 'none';
+  _showTemplateList();
+}
+
+function submitTemplateForm() {
+  const name = (document.getElementById('tplName').value || '').trim();
+  if (!name) { document.getElementById('tplName').focus(); return; }
+  const settings = {
+    roundDuration:    (parseInt(document.getElementById('tplRoundMin').value, 10) || 5) * 60,
+    restDuration:     parseInt(document.getElementById('tplRest').value, 10) || 0,
+    totalRounds:      parseInt(document.getElementById('tplRounds').value, 10) || 1,
+    warningEnabled:   document.getElementById('tplWarningToggle').checked,
+    warningThreshold: parseInt(document.getElementById('tplWarningThreshold').value, 10) || 30,
+    showRound:        document.getElementById('tplShowRound').checked,
+  };
+  const isEdit = !!_editingTemplateId;
+  emit('template:save', { id: _editingTemplateId || undefined, name, settings });
+  _editingTemplateId = null;
+  _showTemplateList();
+  toast(isEdit ? 'Template updated' : 'Template saved');
+}
+
+function applyTemplate(id) {
+  const t = classTemplates.find(x => x.id === id);
+  if (!t || !t.settings) return;
+  const s = t.settings;
+  const allowed = ['roundDuration','restDuration','totalRounds','warningEnabled','warningThreshold','showRound'];
+  for (const k of allowed) { if (s[k] !== undefined) state[k] = s[k]; }
+  if (s.roundDuration !== undefined) state.timeRemaining = s.roundDuration;
+  const minVal = state.roundDuration / 60;
+  document.querySelectorAll('.dur-pill').forEach((b, i) => { b.classList.toggle('active', i + 1 === minVal); });
+  _syncSettingsFromState();
+  updateUI();
+  emit('timer:config', {
+    roundDuration: state.roundDuration, restDuration: state.restDuration,
+    totalRounds:   state.totalRounds,   warningEnabled: state.warningEnabled,
+    warningThreshold: state.warningThreshold, showRound: state.showRound,
+  });
+  if (_pendingProfile?.id) {
+    emit('profile:save', {
+      profileId: _pendingProfile.id,
+      settings: {
+        roundDuration: state.roundDuration, restDuration: state.restDuration,
+        totalRounds: state.totalRounds, warningEnabled: state.warningEnabled,
+        warningThreshold: state.warningThreshold, showRound: state.showRound,
+      },
+    });
+  }
+  closeTemplatesModal();
+  toast('Template applied: ' + t.name);
+}
+
+function deleteTemplate(id) {
+  const tpl = classTemplates.find(t => t.id === id);
+  const label = tpl ? tpl.name : 'this template';
+  if (!confirm('Delete template "' + label + '"?')) return;
+  emit('template:delete', { id });
+}
+
+function _syncSettingsFromState() {
+  const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const setC = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+  setV('totalRoundsInput', state.totalRounds);
+  setV('restTimeInput',    state.restDuration);
+  setC('warningToggle',    state.warningEnabled);
+  setV('warningThreshold', state.warningThreshold);
+  setC('showRoundToggle',  state.showRound);
 }
 
 // ─── MESSAGES ─────────────────────────────────────────────────────

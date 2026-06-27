@@ -56,6 +56,7 @@ export default class BjjTimerServer {
       this.config = {
         tvCodes:  [makeCode(), makeCode(), makeCode(), makeCode()],
         profiles: [],
+        classTemplates: [],
         branding: { appName: 'BJJ Mat Timer', tagline: 'Competition · Training · Sparring', logoDataUrl: '' },
       };
       await this.room.storage.put('config', this.config);
@@ -71,6 +72,7 @@ export default class BjjTimerServer {
         changed = true;
       }
       if (!this.config.branding) { this.config.branding = { appName: 'BJJ Mat Timer', tagline: 'Competition · Training · Sparring', logoDataUrl: '' }; changed = true; }
+      if (!this.config.classTemplates) { this.config.classTemplates = []; changed = true; }
       if (changed) await this.room.storage.put('config', this.config);
     }
     // Load persisted timer states (survive DO hibernation). Sanitize orphans:
@@ -264,14 +266,15 @@ export default class BjjTimerServer {
       connection.setState({ role: 'controller', slot: primary, mats: bound.slice() });
 
       this._safeSend(connection, JSON.stringify({
-        type:       'config',
-        tvCodes:    this.config.tvCodes,
-        profiles:   this._safeProfiles(),
-        branding:   this.config.branding,
-        ctrlSlot:   primary, mats: bound.slice(), ctrlColor, ctrlName: name,
-        timerState: this._computeCurrentState(primary),
+        type:           'config',
+        tvCodes:        this.config.tvCodes,
+        profiles:       this._safeProfiles(),
+        classTemplates: this.config.classTemplates || [],
+        branding:       this.config.branding,
+        ctrlSlot:       primary, mats: bound.slice(), ctrlColor, ctrlName: name,
+        timerState:     this._computeCurrentState(primary),
         stopwatchState: this._computeCurrentStopwatch(primary),
-        tab: this.activeTab[primary],
+        tab:            this.activeTab[primary],
       }));
       // Push the coach's color/name + live timer to every TV in the group.
       const cur = this._computeCurrentState(primary);
@@ -405,6 +408,45 @@ export default class BjjTimerServer {
         if (profile) {
           profile.settings = { ...profile.settings, ...msg.settings };
           this.room.storage.put('config', this.config);
+        }
+        break;
+      }
+
+      case 'template:save': {
+        if (!ctrl) return;
+        if (!this.config.classTemplates) this.config.classTemplates = [];
+        const allowed = ['roundDuration','restDuration','totalRounds','warningEnabled','warningThreshold','showRound'];
+        const settings = {};
+        if (msg.settings) {
+          for (const k of allowed) { if (msg.settings[k] !== undefined) settings[k] = msg.settings[k]; }
+        }
+        const name = (msg.name || 'Unnamed Template').slice(0, 60);
+        if (msg.id) {
+          const tpl = this.config.classTemplates.find(t => t.id === msg.id);
+          if (tpl) { tpl.name = name; tpl.settings = settings; }
+        } else {
+          if (this.config.classTemplates.length >= 50) return;
+          this.config.classTemplates.push({
+            id:        makeId(),
+            name,
+            createdBy: ctrl.name || null,
+            createdAt: new Date().toISOString(),
+            settings,
+          });
+        }
+        await this.room.storage.put('config', this.config);
+        this._broadcastTemplatesUpdated();
+        break;
+      }
+
+      case 'template:delete': {
+        if (!ctrl) return;
+        if (!this.config.classTemplates) return;
+        const idx = this.config.classTemplates.findIndex(t => t.id === msg.id);
+        if (idx !== -1) {
+          this.config.classTemplates.splice(idx, 1);
+          await this.room.storage.put('config', this.config);
+          this._broadcastTemplatesUpdated();
         }
         break;
       }
@@ -812,6 +854,10 @@ export default class BjjTimerServer {
 
   _broadcastProfilesUpdated() {
     this.room.broadcast(JSON.stringify({ type: 'profiles:updated', profiles: this._safeProfiles() }));
+  }
+
+  _broadcastTemplatesUpdated() {
+    this.room.broadcast(JSON.stringify({ type: 'templates:updated', classTemplates: this.config.classTemplates || [] }));
   }
 
   // ─── Server-side timer ───────────────────────────────────────────
