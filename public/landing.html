@@ -185,6 +185,84 @@
     .lp-feature-shot {
       width: 100%; aspect-ratio: 16/9;
     }
+
+  /* ── PRICING ──────────────────────────────────────────────── */
+  .lp-pricing-card {
+    background: #141414; border: 1px solid var(--mat-gold);
+    border-radius: 8px; padding: 2.5rem; max-width: 480px;
+    margin: 0 auto; text-align: center;
+  }
+  .lp-billing-input { display: none; }
+  .lp-billing-toggle {
+    display: inline-flex; background: #0D0D0D;
+    border: 1px solid #2A2A2A; border-radius: 4px;
+    overflow: hidden; margin-bottom: 1.75rem;
+  }
+  .lp-billing-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: .85rem; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase;
+    padding: .45rem 1.25rem; cursor: pointer;
+    color: var(--mat-muted); transition: all .15s;
+  }
+  /* Active label styles — driven by checked radio */
+  #bill-monthly:checked ~ .lp-billing-toggle label[for="bill-monthly"],
+  #bill-yearly:checked  ~ .lp-billing-toggle label[for="bill-yearly"] {
+    background: var(--mat-gold); color: #000;
+  }
+  /* Price display */
+  .lp-price-monthly,
+  .lp-price-yearly {
+    display: flex; align-items: baseline; gap: .35rem;
+    justify-content: center; margin-bottom: .35rem;
+  }
+  .lp-price-yearly { display: none; }
+  #bill-yearly:checked ~ .lp-price-monthly { display: none; }
+  #bill-yearly:checked ~ .lp-price-yearly  { display: flex; flex-wrap: wrap; }
+  .lp-price-amount {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 4rem; letter-spacing: .05em;
+    color: var(--mat-gold); line-height: 1;
+  }
+  .lp-price-per {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1rem; color: var(--mat-muted);
+  }
+  .lp-save-badge {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: .75rem; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase;
+    background: rgba(212,160,23,.15); color: var(--mat-gold);
+    border: 1px solid rgba(212,160,23,.3);
+    border-radius: 3px; padding: .2rem .5rem;
+    align-self: center;
+  }
+  .lp-price-note {
+    font-size: .8rem; color: var(--mat-muted); margin-bottom: 1.75rem;
+  }
+  .lp-includes {
+    list-style: none; text-align: left;
+    display: flex; flex-direction: column; gap: .6rem;
+    margin-bottom: 2rem;
+  }
+  .lp-includes li {
+    font-size: .9rem; color: var(--mat-muted);
+    display: flex; align-items: flex-start; gap: .6rem;
+  }
+  .lp-includes li::before {
+    content: '✓'; color: var(--mat-gold);
+    font-weight: 700; flex-shrink: 0; margin-top: .05rem;
+  }
+  .lp-pricing-fine {
+    font-size: .75rem; color: var(--mat-muted);
+    margin-top: .75rem;
+  }
+  .lp-pricing-contact {
+    text-align: center; margin-top: 1.25rem;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: .9rem; color: var(--mat-muted); letter-spacing: .05em;
+  }
+  .lp-pricing-contact a { color: var(--mat-gold); border-bottom: 1px solid rgba(212,160,23,.3); }
   </style>
 </head>
 <body>
@@ -315,6 +393,59 @@
         <p>Save your class formats — "Sparring: 5 × 5 min / 60s rest", "Drilling: 8 × 3 min / 30s rest" — and load them instantly. No re-entering settings before every class.</p>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ── PRICING ──────────────────────────────────────────────────── -->
+<section class="lp-section">
+  <div class="lp-inner-narrow">
+    <p class="lp-eyebrow" style="text-align:center">Pricing</p>
+    <h2 class="lp-h2" style="text-align:center">Simple Pricing. One Plan.</h2>
+
+    <div class="lp-pricing-card">
+      <!--
+        Radio inputs MUST be first children — CSS sibling selectors
+        (input:checked ~ sibling) only target subsequent siblings.
+      -->
+      <input type="radio" name="billing" id="bill-monthly" class="lp-billing-input" checked>
+      <input type="radio" name="billing" id="bill-yearly" class="lp-billing-input">
+
+      <div class="lp-billing-toggle">
+        <label for="bill-monthly" class="lp-billing-label">Monthly</label>
+        <label for="bill-yearly" class="lp-billing-label">Yearly</label>
+      </div>
+
+      <div class="lp-price-monthly">
+        <span class="lp-price-amount">$29</span>
+        <span class="lp-price-per">/month</span>
+      </div>
+      <div class="lp-price-yearly">
+        <span class="lp-price-amount">$249</span>
+        <span class="lp-price-per">/year</span>
+        <span class="lp-save-badge">2 months free</span>
+      </div>
+
+      <p class="lp-price-note">per gym · billed monthly or yearly</p>
+
+      <ul class="lp-includes">
+        <li>Up to 4 mat rooms</li>
+        <li>Unlimited coach profiles</li>
+        <li>Wall TV sync on any browser</li>
+        <li>White-label gym branding</li>
+        <li>Class templates</li>
+        <li>Custom audio (upload your own bell)</li>
+        <li>Spotify auto-pause integration</li>
+      </ul>
+
+      <a href="/?signup=1" class="btn btn-gold" style="width:100%;font-size:1.05rem;padding:.85rem;display:block;text-align:center">
+        Start Free Trial — 30 Days Free
+      </a>
+      <p class="lp-pricing-fine">No credit card required. Cancel anytime from account settings.</p>
+    </div>
+
+    <p class="lp-pricing-contact">
+      Questions? <a href="mailto:robreed64@gmail.com">robreed64@gmail.com</a>
+    </p>
   </div>
 </section>
 
