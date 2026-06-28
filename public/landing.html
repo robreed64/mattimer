@@ -263,6 +263,78 @@
     font-size: .9rem; color: var(--mat-muted); letter-spacing: .05em;
   }
   .lp-pricing-contact a { color: var(--mat-gold); border-bottom: 1px solid rgba(212,160,23,.3); }
+
+  /* ── FAQ ──────────────────────────────────────────────────── */
+  .lp-faq { display: flex; flex-direction: column; gap: 0; }
+  details.lp-faq-item {
+    border-bottom: 1px solid #2A2A2A;
+  }
+  details.lp-faq-item:first-child { border-top: 1px solid #2A2A2A; }
+  summary.lp-faq-q {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1rem; font-weight: 600; letter-spacing: .04em;
+    padding: 1rem 0; cursor: pointer; list-style: none;
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--mat-text);
+  }
+  summary.lp-faq-q::-webkit-details-marker { display: none; }
+  summary.lp-faq-q::after {
+    content: '+'; font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem; color: var(--mat-gold); flex-shrink: 0; margin-left: 1rem;
+  }
+  details[open] summary.lp-faq-q::after { content: '−'; }
+  .lp-faq-a {
+    font-size: .9rem; color: var(--mat-muted);
+    line-height: 1.6; padding-bottom: 1rem;
+  }
+  .lp-faq-a a { color: var(--mat-gold); border-bottom: 1px solid rgba(212,160,23,.3); }
+
+  /* ── FINAL CTA BANNER ─────────────────────────────────────── */
+  .lp-cta-banner {
+    padding: 6rem 1.5rem;
+    text-align: center;
+    background:
+      radial-gradient(ellipse 60% 50% at 50% 0%, rgba(212,160,23,.15) 0%, transparent 70%),
+      #0D0D0D;
+  }
+  .lp-cta-banner h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2.5rem, 7vw, 5rem);
+    letter-spacing: .06em; line-height: 1;
+    margin-bottom: 1rem;
+  }
+  .lp-cta-banner p {
+    font-size: 1rem; color: var(--mat-muted); margin-bottom: 2rem;
+  }
+  .lp-cta-banner .lp-demo-link { justify-content: center; margin-top: 1rem; }
+
+  /* ── FOOTER ───────────────────────────────────────────────── */
+  .lp-footer {
+    background: #0D0D0D; border-top: 1px solid #2A2A2A;
+    padding: 1.5rem; display: flex;
+    align-items: center; justify-content: space-between;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: .8rem; letter-spacing: .08em;
+    color: var(--mat-muted);
+  }
+  .lp-footer a { color: var(--mat-gold); }
+
+  /* ── RESPONSIVE ───────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .lp-pain-grid    { grid-template-columns: 1fr; }
+    .lp-steps        { grid-template-columns: 1fr; }
+    .lp-feature-row  { grid-template-columns: 1fr; direction: ltr; }
+    .lp-feature-row.lp-flip { direction: ltr; }
+    .lp-feature-shot { aspect-ratio: 16/9; }
+    .lp-step-shot    { aspect-ratio: 16/9; max-height: none; }
+  }
+  @media (max-width: 600px) {
+    .lp-nav-brand span { display: none; }
+    .lp-section, .lp-section-dark { padding: 3.5rem 1rem; }
+    .lp-pain-grid { gap: 1rem; }
+    .lp-steps     { gap: 2.5rem; }
+    .lp-footer    { flex-direction: column; gap: .5rem; text-align: center; }
+  }
   </style>
 </head>
 <body>
@@ -449,7 +521,62 @@
   </div>
 </section>
 
-<!-- sections go here in subsequent tasks -->
+<!-- ── FAQ ──────────────────────────────────────────────────────── -->
+<section class="lp-section-dark">
+  <div class="lp-inner-narrow">
+    <p class="lp-eyebrow" style="text-align:center">FAQ</p>
+    <h2 class="lp-h2" style="text-align:center">Common Questions</h2>
+    <div class="lp-faq">
+
+      <details class="lp-faq-item">
+        <summary class="lp-faq-q">Do my TVs need special hardware?</summary>
+        <p class="lp-faq-a">No. Any TV with a browser works — smart TVs, Amazon Fire Sticks, Chromecasts with a browser, tablets mounted on a stand. If it can open a URL, it's a display.</p>
+      </details>
+
+      <details class="lp-faq-item">
+        <summary class="lp-faq-q">Do all my coaches need email accounts?</summary>
+        <p class="lp-faq-a">No. Coaches pair their phone by scanning the QR code shown on the display — no account, no password. You can also set up a shared kiosk login for devices that stay at the gym.</p>
+      </details>
+
+      <details class="lp-faq-item">
+        <summary class="lp-faq-q">Does it work on iPhone and Android?</summary>
+        <p class="lp-faq-a">Yes. The coach controller runs in any mobile browser and installs to your home screen like a native app. The display works on any browser too.</p>
+      </details>
+
+      <details class="lp-faq-item">
+        <summary class="lp-faq-q">What happens when my trial ends?</summary>
+        <p class="lp-faq-a">You'll see a prompt to subscribe. All your settings, profiles, and templates are preserved — nothing is deleted.</p>
+      </details>
+
+      <details class="lp-faq-item">
+        <summary class="lp-faq-q">Can I cancel anytime?</summary>
+        <p class="lp-faq-a">Yes. Cancel from your account settings in one click. No questions, no retention flow.</p>
+      </details>
+
+      <details class="lp-faq-item">
+        <summary class="lp-faq-q">What if I have more than 4 mat rooms?</summary>
+        <p class="lp-faq-a">Get in touch at <a href="mailto:robreed64@gmail.com">robreed64@gmail.com</a> and we'll figure it out.</p>
+      </details>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── FINAL CTA ─────────────────────────────────────────────────── -->
+<section class="lp-cta-banner">
+  <h2>Ready to Run a Better Class?</h2>
+  <p>30 days free. No credit card. Up and running in under a minute.</p>
+  <a href="/?signup=1" class="btn btn-gold" style="font-size:1.1rem;padding:.9rem 2rem">Start Free Trial</a>
+  <div>
+    <a href="/?room=demo" class="lp-demo-link">Try the Demo first →</a>
+  </div>
+</section>
+
+<!-- ── FOOTER ────────────────────────────────────────────────────── -->
+<footer class="lp-footer">
+  <span>© 2026 BJJ Mat Timer</span>
+  <a href="mailto:robreed64@gmail.com">robreed64@gmail.com</a>
+</footer>
 
 </body>
 </html>
