@@ -161,6 +161,30 @@
     }
     .lp-step p { font-size: .9rem; color: var(--mat-muted); line-height: 1.5; margin-bottom: 1rem; }
     .lp-step-shot { width: 100%; aspect-ratio: 9/16; max-height: 260px; margin: 0 auto; }
+
+    /* ── FEATURES ─────────────────────────────────────────────────────── */
+    .lp-feature-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem; align-items: center;
+      padding: 3.5rem 0;
+      border-bottom: 1px solid #2A2A2A;
+    }
+    .lp-feature-row:last-child { border-bottom: none; }
+    .lp-feature-row.lp-flip { direction: rtl; }
+    .lp-feature-row.lp-flip > * { direction: ltr; }
+    .lp-feature-text h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      letter-spacing: .08em; margin-bottom: .75rem;
+    }
+    .lp-feature-text p {
+      font-size: .95rem; color: var(--mat-muted);
+      line-height: 1.6;
+    }
+    .lp-feature-shot {
+      width: 100%; aspect-ratio: 16/9;
+    }
   </style>
 </head>
 <body>
@@ -241,6 +265,54 @@
         <h3>Hit Start</h3>
         <p>Every screen updates in real time. Your students see the countdown. You coach.</p>
         <div class="lp-shot lp-step-shot">[SCREENSHOT 4: TV countdown synced with phone]</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ─────────────────────────────────────────────────── -->
+<section class="lp-section-dark">
+  <div class="lp-inner">
+    <p class="lp-eyebrow" style="text-align:center">Features</p>
+    <h2 class="lp-h2" style="text-align:center">Built for the Mat</h2>
+
+    <div class="lp-feature-row">
+      <div class="lp-shot lp-feature-shot">[SCREENSHOT 5: TV display — full screen with custom logo]</div>
+      <div class="lp-feature-text">
+        <h3>Any TV. Any Browser.</h3>
+        <p>Smart TV, Fire Stick, Chromecast, tablet on a stand — if it has a browser, it's a display. No app to install, no account to create. Share the URL or scan the QR code and it just works.</p>
+      </div>
+    </div>
+
+    <div class="lp-feature-row lp-flip">
+      <div class="lp-shot lp-feature-shot">[SCREENSHOT 6: controller — mat picker with multiple mats]</div>
+      <div class="lp-feature-text">
+        <h3>Up to 4 Mats Running Simultaneously</h3>
+        <p>Running a gi class on mat 1 and a no-gi class on mat 2? Each mat gets its own independent timer, its own coach, and its own display. No interference, no confusion.</p>
+      </div>
+    </div>
+
+    <div class="lp-feature-row">
+      <div class="lp-shot lp-feature-shot">[SCREENSHOT 7: profile picker modal showing coach cards]</div>
+      <div class="lp-feature-text">
+        <h3>Your Whole Team, One Subscription</h3>
+        <p>Every coach gets their own profile — no email accounts or passwords needed. Coaches pair their phone by scanning the display QR code. Optional PIN protection for each profile.</p>
+      </div>
+    </div>
+
+    <div class="lp-feature-row lp-flip">
+      <div class="lp-shot lp-feature-shot">[SCREENSHOT 8: TV display showing custom gym logo and name]</div>
+      <div class="lp-feature-text">
+        <h3>Your Gym on Every Screen</h3>
+        <p>Replace the default logo and name with your gym's branding. Every display screen shows your gym name, your logo — looks like your gym built it.</p>
+      </div>
+    </div>
+
+    <div class="lp-feature-row">
+      <div class="lp-shot lp-feature-shot">[SCREENSHOT 9: templates modal showing saved presets]</div>
+      <div class="lp-feature-text">
+        <h3>Load Your Round Presets in One Tap</h3>
+        <p>Save your class formats — "Sparring: 5 × 5 min / 60s rest", "Drilling: 8 × 3 min / 30s rest" — and load them instantly. No re-entering settings before every class.</p>
       </div>
     </div>
   </div>
