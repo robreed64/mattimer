@@ -720,8 +720,6 @@ async function _afterAuth(user) {
       link.style.cssText = 'font-family:var(--font-ui);font-size:.75rem;letter-spacing:.1em;color:var(--mat-gold);text-decoration:none;margin-left:auto;padding:.25rem .5rem;border:1px solid var(--mat-gold);border-radius:3px';
       bar.appendChild(link);
     }
-    document.getElementById('teamBtn')?.style.setProperty('display', 'inline-flex');
-    document.getElementById('brandingBtn')?.style.setProperty('display', 'inline-flex');
     document.getElementById('landingSettingsBtn')?.style.setProperty('display', '');
     return;
   }
@@ -808,6 +806,10 @@ async function _afterAuth(user) {
     if (roomId && await _resumeKioskSession()) return;
     if (roomId) {
       document.getElementById('loginView').style.display = 'flex';
+    } else if (_urlParams.get('signup') === '1') {
+      showSignup();
+    } else if (_urlParams.get('login') === '1') {
+      showLogin();
     } else {
       document.getElementById('marketingView').style.display = 'flex';
     }
@@ -1148,14 +1150,31 @@ const CTRL_COLOR_LABEL = {
 
 // ─── AUDIO ENGINE ─────────────────────────────────────────────────
 let audioCtx = null;
-const VALID_THEMES = new Set(['classic', 'bell', 'digital', 'minimal']);
-let soundTheme = VALID_THEMES.has(localStorage.getItem('mattimer_sound_theme'))
-  ? localStorage.getItem('mattimer_sound_theme') : 'classic';
-function setSoundTheme(t) { soundTheme = t; localStorage.setItem('mattimer_sound_theme', t); }
+// Boxing bell sounds: 1 ring for start, 3 for fight over
+function _ringBell(freq, dur, vol, delay = 0) {
+  const ctx = getAudioCtx(), t = ctx.currentTime + delay;
+  [freq, freq * 2.76, freq * 5.4].forEach((f, i) => {
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.value = f;
+    const v = vol * [1, 0.4, 0.15][i];
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.start(t); osc.stop(t + dur + 0.1);
+  });
+}
+function ringBell() { _ringBell(500, 1.5, 0.9); }
+function ringBells(count) {
+  for (let i = 0; i < count; i++) {
+    _ringBell(500, 1.0, 0.9, i * 0.6);
+  }
+}
 
-let masterVolume = parseFloat(localStorage.getItem('mattimer_volume') ?? '1') || 1;
+const _storedVol = parseFloat(localStorage.getItem('mattimer_volume'));
+let masterVolume = isNaN(_storedVol) ? 1 : Math.max(0, Math.min(2, _storedVol));
 function setMasterVolume(v) {
-  masterVolume = Math.max(0, Math.min(2, parseFloat(v) || 1));
+  const parsed = parseFloat(v);
+  masterVolume = isNaN(parsed) ? 1 : Math.max(0, Math.min(2, parsed));
   localStorage.setItem('mattimer_volume', masterVolume);
   const el = document.getElementById('volumeSlider');
   if (el && parseFloat(el.value) !== masterVolume) el.value = masterVolume;
@@ -1165,6 +1184,14 @@ function setMasterVolume(v) {
   if (tvEl && parseFloat(tvEl.value) !== masterVolume) tvEl.value = masterVolume;
   const tvPct = document.getElementById('tvVolumePct');
   if (tvPct) tvPct.textContent = Math.round(masterVolume * 100) + '%';
+  // Reset TV panel auto-hide whenever the slider is dragged while the panel is open
+  if (_tvVolumeTimeout !== null) {
+    clearTimeout(_tvVolumeTimeout);
+    const panel = document.getElementById('tvVolumePanel');
+    _tvVolumeTimeout = (panel && panel.style.display !== 'none')
+      ? setTimeout(() => { panel.style.display = 'none'; _tvVolumeTimeout = null; }, 4000)
+      : null;
+  }
 }
 
 function getAudioCtx() {
@@ -1194,55 +1221,6 @@ function playBuzzer() {
     osc.start(now); osc.stop(now + d + 0.1);
   });
 }
-function testBuzzer() { SOUND_THEMES[soundTheme].buzzerSound(); }
-function testStart()  { SOUND_THEMES[soundTheme].startSound(); }
-
-// ─── SOUND THEMES ─────────────────────────────────────────────────
-function _ringBell(freq, dur, vol, delay = 0) {
-  const ctx = getAudioCtx(), t = ctx.currentTime + delay;
-  [freq, freq * 2.76, freq * 5.4].forEach((f, i) => {
-    const osc = ctx.createOscillator(), g = ctx.createGain();
-    osc.connect(g); g.connect(ctx.destination);
-    osc.type = 'sine'; osc.frequency.value = f;
-    const v = vol * [1, 0.4, 0.15][i];
-    g.gain.setValueAtTime(v, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.start(t); osc.stop(t + dur + 0.1);
-  });
-}
-function _digitalAlarm() {
-  for (let i = 0; i < 4; i++) { beep(800, 0.12, 'sine', 0.4, i * 0.25); beep(600, 0.12, 'sine', 0.4, i * 0.25 + 0.13); }
-}
-const SOUND_THEMES = {
-  classic: {
-    countdownBeep() { playCountdownBeep(); },
-    accentBeep()    { playAccentBeep(); },
-    startSound()    { beep(660, 0.12, 'sine', 0.5); },
-    restSound()     { beep(330, 0.3, 'sine', 0.45); beep(294, 0.3, 'sine', 0.35, 0.25); },
-    buzzerSound()   { playBuzzer(); },
-  },
-  bell: {
-    countdownBeep() { beep(1800, 0.05, 'sine', 0.3); },
-    accentBeep()    { _ringBell(500, 0.3, 0.7); _ringBell(500, 0.3, 0.7, 0.08); },
-    startSound()    { _ringBell(500, 1.5, 0.9); },
-    restSound()     { _ringBell(330, 1.2, 0.6); },
-    buzzerSound()   { _ringBell(500, 1.0, 0.9); _ringBell(500, 1.0, 0.9, 0.28); _ringBell(500, 1.0, 0.9, 0.56); },
-  },
-  digital: {
-    countdownBeep() { beep(1000, 0.07, 'sine', 0.35); },
-    accentBeep()    { beep(1000, 0.08, 'sine', 0.4); beep(1500, 0.08, 'sine', 0.4, 0.1); },
-    startSound()    { beep(523, 0.1, 'sine', 0.4); beep(659, 0.1, 'sine', 0.4, 0.1); beep(784, 0.15, 'sine', 0.45, 0.2); },
-    restSound()     { beep(660, 0.12, 'sine', 0.35); beep(523, 0.15, 'sine', 0.35, 0.15); },
-    buzzerSound()   { _digitalAlarm(); },
-  },
-  minimal: {
-    countdownBeep() { beep(440, 0.06, 'sine', 0.15); },
-    accentBeep()    { beep(660, 0.08, 'sine', 0.2); },
-    startSound()    { beep(880, 0.12, 'sine', 0.25); },
-    restSound()     { beep(440, 0.15, 'sine', 0.2); },
-    buzzerSound()   { beep(330, 0.3, 'sine', 0.3); beep(294, 0.3, 'sine', 0.25, 0.35); },
-  },
-};
 
 // ─── CUSTOM AUDIO FILES ───────────────────────────────────────────
 const customAudio = { start: null, stop: null, rest: null };
@@ -1311,11 +1289,9 @@ function toggleTvVolume() {
   const isShowing = panel.style.display !== 'none';
   panel.style.display = isShowing ? 'none' : '';
   clearTimeout(_tvVolumeTimeout);
-  if (!isShowing) {
-    _tvVolumeTimeout = setTimeout(() => {
-      if (panel.style.display !== 'none') panel.style.display = 'none';
-    }, 4000);
-  }
+  _tvVolumeTimeout = isShowing ? null : setTimeout(() => {
+    panel.style.display = 'none'; _tvVolumeTimeout = null;
+  }, 4000);
 }
 
 function restoreAudioSlots(audioSlots) {
@@ -1636,13 +1612,6 @@ function loginWithProfile(profile) {
   startController();
 }
 
-function closePasswordModal() {
-  ['profilePickerModal','createProfileModal','pinModal'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.style.display = 'none';
-  });
-}
-function submitPassword() { submitPin(); }
-
 // ─── SESSION NAME ─────────────────────────────────────────────────
 function openSessionModal() {
   const input = document.getElementById('sessionNameInput');
@@ -1667,6 +1636,8 @@ function submitSessionName(fallback) {
 function openRenameSession() {
   const input = document.getElementById('sessionNameInput');
   if (input) input.value = myCtrlName || '';
+  const titleEl = document.querySelector('#sessionModal .modal-title');
+  if (titleEl) titleEl.textContent = '✏️ Rename Session';
   document.getElementById('sessionModal').style.display = 'flex';
   setTimeout(() => input && input.focus(), 80);
   // Override submit to just rename without re-joining
@@ -1678,6 +1649,7 @@ function openRenameSession() {
       const newName = (inp ? inp.value.trim() : '') || myCtrlName || 'Unnamed Class';
       myCtrlName = newName;
       document.getElementById('sessionModal').style.display = 'none';
+      if (titleEl) titleEl.textContent = '🥋 Who\'s Running This Class?';
       emit('ctrl:rename', { name: newName });
       applyControllerColor();
     };
@@ -1928,14 +1900,10 @@ function _onMessage(event) {
       if (mode !== 'display') break;
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const theme = SOUND_THEMES[soundTheme] || SOUND_THEMES.classic;
         const play = () => {
           switch (msg.soundType) {
-            case 'beep':   theme.countdownBeep(); break;
-            case 'accent': theme.accentBeep(); break;
-            case 'buzzer': if (!playCustomAudio('stop'))  theme.buzzerSound(); break;
-            case 'start':  if (!playCustomAudio('start')) theme.startSound(); break;
-            case 'rest':   if (!playCustomAudio('rest'))  theme.restSound(); break;
+            case 'start':  if (!playCustomAudio('start')) ringBell(); break;
+            case 'buzzer': if (!playCustomAudio('stop'))  ringBells(3); break;
           }
         };
         if (audioCtx.state === 'suspended') audioCtx.resume().then(play).catch(()=>{});
@@ -2073,7 +2041,7 @@ function startTimer(silent = false) {
   getAudioCtx();
   if (!silent) {
     const playedCustom = playCustomAudio('start');
-    if (!playedCustom) SOUND_THEMES[soundTheme].startSound();
+    if (!playedCustom) ringBell();
   }
   emit('timer:start');
   // Optimistic UI — server state will confirm within one tick
@@ -2111,14 +2079,6 @@ function applyControllerStateSnapshot(s, { silent = false } = {}) {
   Object.assign(state, s);
 
   if (!silent) {
-    const beepOn   = document.getElementById('soundBeepToggle')?.checked ?? true;
-    const buzzerOn = document.getElementById('soundBuzzerToggle')?.checked ?? true;
-
-    // Countdown beeps (server also sends these to TVs; controller plays locally)
-    if (s.phase === 'fight' && s.running && s.timeRemaining > 0 && s.timeRemaining <= 10 && beepOn) {
-      if (s.timeRemaining <= 3) SOUND_THEMES[soundTheme].accentBeep();
-      else                      SOUND_THEMES[soundTheme].countdownBeep();
-    }
     // Spotify auto pause/resume (coach controller only; no-op unless connected
     // + enabled). Fire-and-forget so a slow/failed Spotify call never blocks the
     // timer. See public/js/spotify.js.
@@ -2127,23 +2087,22 @@ function applyControllerStateSnapshot(s, { silent = false } = {}) {
 
     // Fight → rest
     if (prevPhase === 'fight' && s.phase === 'rest') {
-      if (buzzerOn) { const pc = playCustomAudio('stop'); if (!pc) SOUND_THEMES[soundTheme].buzzerSound(); }
-      const pr = playCustomAudio('rest'); if (!pr) SOUND_THEMES[soundTheme].restSound();
+      const pc = playCustomAudio('stop'); if (!pc) ringBells(3);
       if (sp && spOpts.pauseRest) sp.spotifyPause();
     }
     // Rest → fight (start of new round)
     if (prevPhase === 'rest' && s.phase === 'fight') {
-      const ps = playCustomAudio('start'); if (!ps) SOUND_THEMES[soundTheme].startSound();
+      const ps = playCustomAudio('start'); if (!ps) ringBell();
       if (sp) sp.spotifyResume();
     }
     // Fight → fight, new round with no rest period
     if (prevPhase === 'fight' && s.phase === 'fight' && s.currentRound > prevRound && prevRunning) {
-      const ps = playCustomAudio('start'); if (!ps) SOUND_THEMES[soundTheme].startSound();
+      const ps = playCustomAudio('start'); if (!ps) ringBell();
       if (sp) sp.spotifyResume();
     }
     // Timer fully ended (fight, last round, running→stopped)
     if (prevRunning && !s.running && s.timeRemaining === 0) {
-      if (buzzerOn) { const pc = playCustomAudio('stop'); if (!pc) SOUND_THEMES[soundTheme].buzzerSound(); }
+      const pc = playCustomAudio('stop'); if (!pc) ringBells(3);
       if (sp && spOpts.pauseEnd) sp.spotifyPause();
     }
     // Manual pause mid-round (coach paused the timer, round not over)
@@ -2162,8 +2121,6 @@ function applyControllerStateSnapshot(s, { silent = false } = {}) {
 // ─── SETTINGS MODAL ───────────────────────────────────────────────
 function openSettingsModal() {
   document.getElementById('settingsModal').style.display = 'flex';
-  const sel = document.getElementById('soundThemeSelect');
-  if (sel) sel.value = soundTheme;
   window.spotifyRefreshUi?.();
 }
 function closeSettingsModal(e) {
@@ -2173,10 +2130,19 @@ function closeSettingsModal(e) {
 
 // ─── DURATION (1–10 min pills) ────────────────────────────────────
 function setDurationMin(min) {
+  const prevRound = state.roundDuration;
   state.roundDuration = min * 60;
   // Picking a duration restarts the round at the new time (the server restarts a
   // running fight round too); reflect it immediately rather than waiting a tick.
-  if (!state.running || state.phase === 'fight') state.timeRemaining = state.roundDuration;
+  if (state.running && state.phase === 'fight') {
+    // Running: always restart at new duration
+    state.timeRemaining = state.roundDuration;
+  } else if (!state.running) {
+    // Paused: match server logic (only update if at full duration, else clamp)
+    state.timeRemaining = state.timeRemaining >= prevRound
+      ? state.roundDuration
+      : Math.min(state.timeRemaining, state.roundDuration);
+  }
   document.querySelectorAll('.dur-pill').forEach((b, i) => {
     b.classList.toggle('active', i + 1 === min);
   });
@@ -2304,6 +2270,7 @@ function submitTemplateForm() {
 }
 
 function applyTemplate(id) {
+  if (state.running) { toast('Stop the timer before loading a template.'); return; }
   const t = classTemplates.find(x => x.id === id);
   if (!t || !t.settings) return;
   const s = t.settings;
@@ -2750,6 +2717,7 @@ function openBrandingModal() {
   const tvList = document.getElementById('tvCodesList');
   if (_gymRole === 'owner' && tvCodes && tvSection && tvList) {
     tvSection.style.display = '';
+    document.getElementById('tvCodesDivider')?.style.setProperty('display', '');
     tvList.innerHTML = tvCodes.map((code, i) => `
       <div style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;padding:.5rem .75rem;display:flex;align-items:center;justify-content:space-between">
         <div>
@@ -2765,6 +2733,7 @@ function openBrandingModal() {
   const roomsSection = document.getElementById('roomsSection');
   if (_gymRole === 'owner' && roomsSection) {
     roomsSection.style.display = '';
+    document.getElementById('roomsDivider')?.style.setProperty('display', '');
     loadRoomsList();
   }
 

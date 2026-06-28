@@ -19,7 +19,7 @@
 <script src="/js/spotify.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="/css/main.css?v=47">
+<link rel="stylesheet" href="/css/main.css?v=52">
 </head>
 <body>
 
@@ -67,7 +67,6 @@
         <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Email</label>
         <input type="email" id="authEmail" placeholder="you@gym.com" autocomplete="email"
           style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;transition:border-color .15s"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
           onkeydown="if(event.key==='Enter')document.getElementById('authPass').focus()">
       </div>
       <div>
@@ -75,7 +74,6 @@
         <div style="display:flex;align-items:center;gap:.5rem">
           <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password" autocapitalize="none" autocorrect="off"
             style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;transition:border-color .15s"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
             onkeydown="if(event.key==='Enter')signIn()">
           <button type="button" onclick="togglePw('authPass',this)" tabindex="-1"
             style="flex-shrink:0;background:none;border:1px solid var(--mat-border);border-radius:4px;cursor:pointer;color:var(--mat-muted);font-size:.9rem;padding:.6rem .65rem;line-height:1">👁</button>
@@ -106,7 +104,6 @@
         <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Gym username</label>
         <input type="text" id="coachUsername" placeholder="yourgym" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username"
           style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;transition:border-color .15s"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
           onkeydown="if(event.key==='Enter')document.getElementById('coachPassword').focus()">
       </div>
       <div>
@@ -114,7 +111,6 @@
         <div style="display:flex;align-items:center;gap:.5rem">
           <input type="password" id="coachPassword" placeholder="••••••••" autocapitalize="none" autocorrect="off" autocomplete="current-password"
             style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;transition:border-color .15s"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
             onkeydown="if(event.key==='Enter')gymLogin()">
           <button type="button" onclick="togglePw('coachPassword',this)" tabindex="-1"
             style="flex-shrink:0;background:none;border:1px solid var(--mat-border);border-radius:4px;cursor:pointer;color:var(--mat-muted);font-size:.9rem;padding:.6rem .65rem;line-height:1">👁</button>
@@ -140,21 +136,18 @@
           <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Your Name</label>
           <input type="text" id="signupName" placeholder="Jane Smith" autocomplete="name"
             style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;box-sizing:border-box;transition:border-color .15s"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
             onkeydown="if(event.key==='Enter')document.getElementById('signupGymName').focus()">
         </div>
         <div>
           <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Gym Name</label>
           <input type="text" id="signupGymName" placeholder="Control BJJ" autocomplete="organization"
             style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;box-sizing:border-box;transition:border-color .15s"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
             onkeydown="if(event.key==='Enter')document.getElementById('signupEmail').focus()">
         </div>
         <div>
           <label style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.15em;color:var(--mat-muted);text-transform:uppercase;display:block;margin-bottom:.35rem">Email</label>
           <input type="email" id="signupEmail" placeholder="you@yourgym.com" autocomplete="email"
             style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.7rem 1rem;outline:none;width:100%;box-sizing:border-box;transition:border-color .15s"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
             onkeydown="if(event.key==='Enter')submitSignup()">
         </div>
       </div>
@@ -204,19 +197,6 @@
   </div>
   <h1 class="landing-title" id="landingTitle">BJJ Mat Timer</h1>
   <p class="landing-sub" id="landingTagline">Competition · Training · Sparring</p>
-
-  <!-- Room picker — shown when no ?room= in URL -->
-  <div id="roomPicker" style="display:none;flex-direction:column;align-items:center;gap:1rem;width:100%;max-width:420px;margin-bottom:2rem">
-    <p style="font-family:var(--font-ui);font-size:.9rem;letter-spacing:.12em;color:var(--mat-muted);text-transform:uppercase;text-align:center">Create a gym room or join an existing one</p>
-    <button class="btn btn-gold" style="width:100%;font-size:1.1rem;padding:1rem" onclick="createRoom()">+ Create a New Room</button>
-    <div style="font-family:var(--font-ui);font-size:.75rem;letter-spacing:.2em;color:var(--mat-muted);text-transform:uppercase">— or join —</div>
-    <div style="display:flex;gap:.5rem;width:100%">
-      <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="8"
-        style="flex:1;text-transform:uppercase;letter-spacing:.2em;font-size:1.1rem"
-        onkeydown="if(event.key==='Enter')joinRoom()">
-      <button class="btn btn-outline" onclick="joinRoom()">Join</button>
-    </div>
-  </div>
 
   <!-- Demo mode banner -->
   <div id="demoBanner" style="display:none;align-items:center;gap:.75rem;margin-bottom:1rem;background:rgba(212,160,23,.1);border:1px solid var(--mat-gold);border-radius:4px;padding:.65rem 1rem;width:100%;max-width:680px;box-sizing:border-box">
@@ -322,15 +302,13 @@
         <label>Name <span style="color:var(--mat-muted);font-weight:400">(coach name or class title)</span></label>
         <input type="text" id="newProfileName" placeholder="e.g. Coach Mike · Fundamentals" maxlength="40"
           style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1.05rem;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s"
-          onkeydown="if(event.key==='Enter')document.getElementById('newProfilePin').focus()"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+          onkeydown="if(event.key==='Enter')document.getElementById('newProfilePin').focus()">
       </div>
       <div class="modal-field">
         <label>PIN <span style="color:var(--mat-muted);font-weight:400">(optional — leave blank for no PIN)</span></label>
         <input type="password" id="newProfilePin" placeholder="Optional PIN" maxlength="20" inputmode="numeric"
           style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;letter-spacing:.3em;text-align:center;padding:.6rem 1rem;outline:none;width:100%;transition:border-color .2s"
-          onkeydown="if(event.key==='Enter')submitCreateProfile()"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+          onkeydown="if(event.key==='Enter')submitCreateProfile()">
       </div>
     </div>
     <div class="modal-footer">
@@ -351,15 +329,13 @@
       <div class="modal-field">
         <label>Name <span style="color:var(--mat-muted);font-weight:400">(coach name or class title)</span></label>
         <input type="text" id="editProfileName" maxlength="40"
-          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1.05rem;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1.05rem;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s">
       </div>
       <div class="modal-field">
         <label>New PIN <span style="color:var(--mat-muted);font-weight:400">(leave blank to keep current)</span></label>
         <input type="password" id="editProfilePin" placeholder="New PIN" maxlength="20" inputmode="numeric"
           style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;letter-spacing:.3em;text-align:center;padding:.6rem 1rem;outline:none;width:100%;transition:border-color .2s"
-          onkeydown="if(event.key==='Enter')submitEditProfile()"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+          onkeydown="if(event.key==='Enter')submitEditProfile()">
         <button type="button" class="btn btn-outline" style="font-size:.78rem;padding:.4rem .6rem;margin-top:.5rem" onclick="removeProfilePin()">Remove PIN (no PIN required)</button>
       </div>
     </div>
@@ -385,9 +361,7 @@
         <input type="password" id="pinInput" placeholder="PIN"
           inputmode="numeric" maxlength="20"
           style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:2.5rem;letter-spacing:.3em;text-align:center;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s"
-          onkeydown="if(event.key==='Enter')submitPin()"
-          onfocus="this.style.borderColor='var(--mat-gold)'"
-          onblur="this.style.borderColor='var(--mat-border)'">
+          onkeydown="if(event.key==='Enter')submitPin()">
         <div id="pinError" style="color:var(--mat-red);font-family:var(--font-ui);font-size:.8rem;letter-spacing:.05em;margin-top:.4rem;display:none;text-align:center">Incorrect PIN — try again</div>
       </div>
     </div>
@@ -445,14 +419,12 @@
         <div style="display:flex;flex-direction:column;gap:.5rem">
           <div style="display:flex;align-items:center;gap:.5rem">
             <input type="password" id="acctNewPw" placeholder="New password (min 8 chars)" autocapitalize="none" autocorrect="off"
-              style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;transition:border-color .15s"
-              onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+              style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;transition:border-color .15s">
             <button type="button" onclick="togglePw('acctNewPw',this)" tabindex="-1"
               style="flex-shrink:0;background:none;border:1px solid var(--mat-border);border-radius:4px;cursor:pointer;color:var(--mat-muted);font-size:.85rem;padding:.5rem .55rem;line-height:1">👁</button>
           </div>
           <input type="password" id="acctConfirmPw" placeholder="Confirm new password"
             style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;width:100%;transition:border-color .15s"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
             onkeydown="if(event.key==='Enter')changePassword()">
           <div id="acctPwError" style="display:none;color:var(--mat-red);font-family:var(--font-ui);font-size:.8rem"></div>
           <button class="btn btn-gold" style="width:100%" onclick="changePassword()">Update Password</button>
@@ -470,12 +442,10 @@
       <div id="kioskCurrentUser" style="font-family:var(--font-ui);font-size:.82rem;color:var(--mat-text);margin-bottom:.6rem"></div>
       <div style="display:flex;flex-direction:column;gap:.5rem">
         <input type="text" id="kioskUsername" placeholder="Gym username (e.g. yourgym)" autocapitalize="none" autocorrect="off" spellcheck="false"
-          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;width:100%;box-sizing:border-box;transition:border-color .15s"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;width:100%;box-sizing:border-box;transition:border-color .15s">
         <div style="display:flex;align-items:center;gap:.5rem">
           <input type="password" id="kioskPassword" placeholder="Set a password (min 8 chars)" autocapitalize="none" autocorrect="off"
-            style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;transition:border-color .15s"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+            style="flex:1;min-width:0;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.9rem;padding:.6rem .8rem;outline:none;transition:border-color .15s">
           <button type="button" onclick="togglePw('kioskPassword',this)" tabindex="-1"
             style="flex-shrink:0;background:none;border:1px solid var(--mat-border);border-radius:4px;cursor:pointer;color:var(--mat-muted);font-size:.85rem;padding:.5rem .55rem;line-height:1">👁</button>
         </div>
@@ -581,14 +551,12 @@
       <div class="modal-field">
         <label>Number of Rounds</label>
         <input type="number" id="totalRoundsInput" value="10" min="1" max="20" onchange="updateConfig()"
-          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none">
       </div>
       <div class="modal-field">
         <label>Rest Between Rounds (seconds)</label>
         <input type="number" id="restTimeInput" value="60" min="0" max="600" onchange="updateConfig()"
-          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none">
       </div>
 
       <!-- Warning -->
@@ -600,8 +568,7 @@
       <div class="modal-field">
         <label>Warn at (seconds remaining)</label>
         <input type="number" id="warningThreshold" value="30" min="5" max="120" onchange="updateConfig()"
-          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none"
-          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none">
       </div>
 
       <!-- Broadcast -->
@@ -624,7 +591,7 @@
         <label>Spotify (Premium)</label>
         <button class="btn btn-outline" id="spotifyConnectBtn" style="width:100%;font-size:.85rem" onclick="spotifyConnect()">Connect Spotify</button>
         <div id="spotifyConnected" style="display:none">
-          <div id="spotifyStatus" style="font-size:.78rem;color:var(--mat-text-dim);margin-bottom:.6rem">Connected</div>
+          <div id="spotifyStatus" style="font-size:.78rem;color:var(--mat-muted);margin-bottom:.6rem">Connected</div>
           <div class="toggle-row"><span>Auto pause/resume music</span><label class="toggle"><input type="checkbox" id="spotifyEnableToggle" onchange="spotifySetEnabled(this.checked)"><span class="toggle-slider"></span></label></div>
           <div class="toggle-row"><span>Pause at end of round</span><label class="toggle"><input type="checkbox" id="spotifyPauseRestToggle" checked onchange="spotifySaveOpts()"><span class="toggle-slider"></span></label></div>
           <div class="toggle-row"><span>Pause at session end</span><label class="toggle"><input type="checkbox" id="spotifyPauseEndToggle" checked onchange="spotifySaveOpts()"><span class="toggle-slider"></span></label></div>
@@ -644,22 +611,6 @@
           <input type="range" id="volumeSlider" min="0" max="2" step="0.05" value="1"
             oninput="setMasterVolume(this.value)"
             style="width:100%;accent-color:var(--mat-gold);cursor:pointer">
-        </div>
-        <div class="toggle-row" style="margin-bottom:.6rem">
-          <span>Sound Theme</span>
-          <select id="soundThemeSelect" onchange="setSoundTheme(this.value)"
-            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:.85rem;padding:.3rem .5rem;cursor:pointer;outline:none">
-            <option value="classic">Classic</option>
-            <option value="bell">Boxing Bell</option>
-            <option value="digital">Digital</option>
-            <option value="minimal">Minimal</option>
-          </select>
-        </div>
-        <div class="toggle-row"><span>Countdown beeps</span><label class="toggle"><input type="checkbox" id="soundBeepToggle" checked><span class="toggle-slider"></span></label></div>
-        <div class="toggle-row"><span>End buzzer</span><label class="toggle"><input type="checkbox" id="soundBuzzerToggle" checked><span class="toggle-slider"></span></label></div>
-        <div style="display:flex;gap:.5rem;margin-top:.5rem;margin-bottom:1rem">
-          <button class="btn btn-outline" style="flex:1;font-size:.8rem" onclick="testStart()">🔊 Test Start</button>
-          <button class="btn btn-outline" style="flex:1;font-size:.8rem" onclick="testBuzzer()">🔊 Test Buzzer</button>
         </div>
         <div class="audio-uploads">
           <div class="audio-upload-row">
@@ -703,9 +654,7 @@
         <input type="text" id="sessionNameInput" placeholder="e.g. Coach Mike — Fundamentals"
           maxlength="40"
           style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1.15rem;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s;letter-spacing:.04em"
-          onkeydown="if(event.key==='Enter')submitSessionName()"
-          onfocus="this.style.borderColor='var(--mat-gold)'"
-          onblur="this.style.borderColor='var(--mat-border)'">
+          onkeydown="if(event.key==='Enter')submitSessionName()">
         <span style="font-family:var(--font-ui);font-size:.7rem;color:var(--mat-muted);margin-top:.3rem;letter-spacing:.05em">Shown on TVs and visible to other controllers</span>
       </div>
     </div>
@@ -844,10 +793,12 @@
           <div id="bPreviewTagline" class="brand-preview-tagline">Competition · Training · Sparring</div>
         </div>
       </div>
+      <hr class="modal-divider" id="tvCodesDivider" style="display:none">
       <div class="modal-field" id="tvCodesSection" style="display:none">
         <label>TV Access Codes</label>
         <div id="tvCodesList" style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem"></div>
       </div>
+      <hr class="modal-divider" id="roomsDivider" style="display:none">
       <div class="modal-field" id="roomsSection" style="display:none">
         <label>Mat Rooms</label>
         <div id="roomsList" style="display:flex;flex-direction:column;gap:.4rem"></div>
@@ -888,26 +839,22 @@
         <div class="modal-field">
           <label>Template Name</label>
           <input type="text" id="tplName" placeholder="e.g. Fundamentals · Long Rounds" maxlength="60"
-            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1.05rem;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s;box-sizing:border-box"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1.05rem;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s;box-sizing:border-box">
         </div>
         <div class="modal-field">
           <label>Round Duration (minutes)</label>
           <input type="number" id="tplRoundMin" value="5" min="1" max="99"
-            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box">
         </div>
         <div class="modal-field">
           <label>Rest Between Rounds (seconds)</label>
           <input type="number" id="tplRest" value="60" min="0" max="600"
-            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box">
         </div>
         <div class="modal-field">
           <label>Number of Rounds</label>
           <input type="number" id="tplRounds" value="10" min="1" max="20"
-            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box">
         </div>
         <div class="modal-field">
           <label>Display Options</label>
@@ -923,8 +870,7 @@
         <div class="modal-field">
           <label>Warn at (seconds remaining)</label>
           <input type="number" id="tplWarningThreshold" value="30" min="5" max="120"
-            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box"
-            onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+            style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none;box-sizing:border-box">
         </div>
       </div>
       <div class="modal-footer" style="justify-content:space-between">
@@ -936,8 +882,8 @@
   </div>
 </div>
 
-<script src="/js/progress.js?v=47"></script>
-<script src="/js/app.js?v=47"></script>
+<script src="/js/progress.js?v=51"></script>
+<script src="/js/app.js?v=52"></script>
 
 </body>
 </html>
