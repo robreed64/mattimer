@@ -117,6 +117,50 @@
       width: 100%; max-width: 720px;
       aspect-ratio: 16/9;
     }
+
+    /* ── PROBLEM ──────────────────────────────────────────────── */
+    .lp-pain-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem; margin-bottom: 2rem;
+    }
+    .lp-pain-card {
+      background: #0D0D0D; border: 1px solid #2A2A2A;
+      border-radius: 6px; padding: 1.5rem;
+    }
+    .lp-pain-x {
+      font-size: 1.1rem; color: var(--mat-red);
+      margin-bottom: .6rem; display: block;
+    }
+    .lp-pain-card p { font-size: .95rem; line-height: 1.55; color: var(--mat-muted); }
+    .lp-pain-card strong { color: var(--mat-text); }
+    .lp-transition {
+      text-align: center;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.1rem; letter-spacing: .15em; text-transform: uppercase;
+      color: var(--mat-muted);
+    }
+
+    /* ── HOW IT WORKS ─────────────────────────────────────────── */
+    .lp-steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+    }
+    .lp-step { text-align: center; }
+    .lp-step-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 3.5rem; line-height: 1;
+      color: var(--mat-gold); opacity: .35;
+      margin-bottom: .5rem;
+    }
+    .lp-step h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.3rem; letter-spacing: .08em;
+      margin-bottom: .5rem;
+    }
+    .lp-step p { font-size: .9rem; color: var(--mat-muted); line-height: 1.5; margin-bottom: 1rem; }
+    .lp-step-shot { width: 100%; aspect-ratio: 9/16; max-height: 260px; margin: 0 auto; }
   </style>
 </head>
 <body>
@@ -149,6 +193,56 @@
   <!-- Replace src with your screenshot once taken -->
   <div class="lp-shot lp-hero-shot">
     [SCREENSHOT 1: TV display — active round countdown, e.g. "Round 2 of 3 · 4:23 · FIGHT"]
+  </div>
+</section>
+
+<!-- ── PROBLEM ─────────────────────────────────────────────────── -->
+<section class="lp-section-dark">
+  <div class="lp-inner-mid">
+    <p class="lp-eyebrow" style="text-align:center">Sound Familiar?</p>
+    <div class="lp-pain-grid">
+      <div class="lp-pain-card">
+        <span class="lp-pain-x">✕</span>
+        <p><strong>You're watching the clock instead of watching your students.</strong> Split attention kills coaching quality — and your phone screen is useless from the far end of the mat.</p>
+      </div>
+      <div class="lp-pain-card">
+        <span class="lp-pain-x">✕</span>
+        <p><strong>Phone timers don't work for a room full of people.</strong> Students can't see it. You have to yell the time. Every. Round.</p>
+      </div>
+      <div class="lp-pain-card">
+        <span class="lp-pain-x">✕</span>
+        <p><strong>Resetting a stopwatch mid-drill breaks your flow.</strong> You lose track. The drill runs long. The class runs late.</p>
+      </div>
+    </div>
+    <p class="lp-transition">There's a better way.</p>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ─────────────────────────────────────────────── -->
+<section class="lp-section">
+  <div class="lp-inner-mid">
+    <p class="lp-eyebrow" style="text-align:center">How It Works</p>
+    <h2 class="lp-h2" style="text-align:center">Up and Running in 60 Seconds</h2>
+    <div class="lp-steps">
+      <div class="lp-step">
+        <div class="lp-step-num">1</div>
+        <h3>Open on Your Phone</h3>
+        <p>Go to the app on your phone. Pick your mat and coach profile.</p>
+        <div class="lp-shot lp-step-shot">[SCREENSHOT 2: phone controller — mat picker]</div>
+      </div>
+      <div class="lp-step">
+        <div class="lp-step-num">2</div>
+        <h3>Scan on Any TV</h3>
+        <p>Point your wall TV's browser at the display URL — or scan the QR code shown on screen. Any smart TV, Fire Stick, or tablet works.</p>
+        <div class="lp-shot lp-step-shot">[SCREENSHOT 3: phone camera scanning QR on TV]</div>
+      </div>
+      <div class="lp-step">
+        <div class="lp-step-num">3</div>
+        <h3>Hit Start</h3>
+        <p>Every screen updates in real time. Your students see the countdown. You coach.</p>
+        <div class="lp-shot lp-step-shot">[SCREENSHOT 4: TV countdown synced with phone]</div>
+      </div>
+    </div>
   </div>
 </section>
 
