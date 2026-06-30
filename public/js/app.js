@@ -2078,7 +2078,11 @@ function applyControllerStateSnapshot(s, { silent = false } = {}) {
   const prevRound   = state.currentRound;
   Object.assign(state, s);
 
-  if (!silent) {
+  // Suppress phase-transition sounds from queued WS messages that arrive while
+  // the phone is waking from sleep. _hiddenAt is set when the screen turns off
+  // and only cleared inside the visibilitychange handler, so it's still set
+  // during the narrow gap between "browser resumes network" and that event.
+  if (!silent && !_hiddenAt) {
     // Spotify auto pause/resume (coach controller only; no-op unless connected
     // + enabled). Fire-and-forget so a slow/failed Spotify call never blocks the
     // timer. See public/js/spotify.js.
