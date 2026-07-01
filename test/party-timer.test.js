@@ -221,3 +221,232 @@ test('onAlarm recovers timer state from storage after DO hibernation', async () 
   assert.ok(s.timerStates[1], 'state was reloaded from storage');
   assert.equal(s.timerStates[1].timeRemaining, 292);
 });
+
+// ─── Code-review bug regressions ─────────────────────────────────────
+
+// Helpers for tests that go through onConnect (demo room bypasses auth).
+function makeDemoRoom() {
+  const room = makeRoom();
+  room.id = 'demo';
+  return room;
+}
+function makeCtrlConn(id, params = {}) {
+  const url = new URL('http://localhost/?role=controller&mats=1&name=Coach&clientId=default-client');
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+  return {
+    conn: {
+      id,
+      _sent: [],
+      _closed: false,
+      send(msg) { try { this._sent.push(JSON.parse(msg)); } catch {} },
+      close() { this._closed = true; },
+      setState() {},
+    },
+    ctx: { request: { url: url.toString() } },
+  };
+}
+
+// Bug 1 + Bug 4: onConnect preserve-running path must not overwrite ts.mats
+// or wipe swStates/activeTab when a running timer survives DO hibernation.
+test('onConnect preserve-running does not overwrite mat group or wipe stopwatch state', async () => {
+  const room = makeDemoRoom();
+  const { conn, ctx } = makeCtrlConn('conn1', { mats: '1', clientId: 'phone-abc' });
+  room.getConnections = (tag) => tag === 'controller' ? [conn] : [];
+
+  const s = new BjjTimerServer(room);
+  const baseTs = { ...s._newTimerState(), mats: [1, 2],
+    running: true, startedAt: Date.now(), timeRemainingAtStart: 200, timeRemaining: 200 };
+  await room.storage.put('timerState:1', baseTs);
+  await room.storage.put('stopwatchState:1', { running: true, elapsed: 45, ts: Date.now() });
+  await s.onStart();
+
+  assert.deepEqual(s.timerStates[1].mats, [1, 2], 'precondition: mat group loaded');
+  assert.equal(s.matClientId[1], null, 'precondition: matClientId lost after hibernation');
+
+  await s.onConnect(conn, ctx);
+
+  assert.deepEqual(s.timerStates[1].mats, [1, 2], 'mat group not overwritten by reconnect');
+  assert.equal(s.timerStates[1].running, true, 'timer still running');
+  assert.equal(s.swStates[1]?.running, true, 'stopwatch state not wiped');
+});
+
+// Bug 2: onAlarm must recover swStates from storage after DO hibernation so
+// a running stopwatch correctly blocks a pending idle sweep.
+test('onAlarm recovers swStates from storage and uses it to block an overdue idle sweep', async () => {
+  const { s, room } = serverOnMat1();
+  await room.storage.put('stopwatchState:1', { running: true, elapsed: 10 });
+  s.swStates[1] = null;              // simulate hibernation clearing in-memory state
+  s._idleSweepRecovered = true;      // isolate: skip idleSweepAt re-read
+  s.idleSweepAt[1] = Date.now() - 1; // overdue sweep
+  s.timerStates[1].running = false;  // timer not running — only swStates should block sweep
+
+  await s.onAlarm();
+
+  assert.equal(s.swStates[1]?.running, true, 'swStates recovered from storage');
+  assert.ok(s.idleSweepAt[1] !== 0, 'idle sweep held by running stopwatch');
+});
+
+// Bug 3: restDuration changes must sync timeRemaining, mirroring the existing
+// roundDuration behaviour — both paused and running.
+test('restDuration increase while paused at start of rest syncs timeRemaining', async () => {
+  const { s } = serverOnMat1({ roundDuration: 3, restDuration: 60, totalRounds: 2, timeRemaining: 3 });
+  await start(s);
+  advance(3);
+  await s.onAlarm();                      // fight ends → rest starts (timeRemaining=60)
+  await send(s, { type: 'timer:pause' }); // pause immediately at top of rest
+
+  assert.equal(s.timerStates[1].phase, 'rest');
+  assert.equal(s.timerStates[1].timeRemaining, 60);
+
+  await send(s, { type: 'timer:config', restDuration: 120 });
+  assert.equal(s.timerStates[1].restDuration, 120);
+  assert.equal(s.timerStates[1].timeRemaining, 120, 'timeRemaining follows new restDuration');
+});
+
+test('restDuration decrease while paused mid-rest clamps timeRemaining', async () => {
+  const { s } = serverOnMat1({ roundDuration: 3, restDuration: 60, totalRounds: 2, timeRemaining: 3 });
+  await start(s);
+  advance(3);
+  await s.onAlarm();   // → rest, timeRemaining=60
+  advance(20);
+  await s.onAlarm();   // rest has 40s left
+  await send(s, { type: 'timer:pause' });
+
+  assert.equal(s.timerStates[1].phase, 'rest');
+  assert.equal(s.timerStates[1].timeRemaining, 40);
+
+  await send(s, { type: 'timer:config', restDuration: 30 });
+  assert.equal(s.timerStates[1].restDuration, 30);
+  assert.equal(s.timerStates[1].timeRemaining, 30, 'clamped down to new restDuration');
+});
+
+test('restDuration change while rest is running resets the countdown from the new value', async () => {
+  const { s } = serverOnMat1({ roundDuration: 3, restDuration: 60, totalRounds: 2, timeRemaining: 3 });
+  await start(s);
+  advance(3);
+  await s.onAlarm();   // → rest running, timeRemaining=60
+
+  assert.equal(s.timerStates[1].phase, 'rest');
+  assert.equal(s.timerStates[1].running, true);
+
+  await send(s, { type: 'timer:config', restDuration: 90 });
+  assert.equal(s.timerStates[1].restDuration, 90);
+  assert.equal(s.timerStates[1].timeRemaining, 90, 'rest restarted at new duration');
+  assert.ok(s.timerStates[1].startedAt > 0, 'startedAt set for resumed rest');
+});
+
+// Bug 5: template:save for a concurrently-deleted template must broadcast
+// templates:updated so stale clients correct themselves immediately.
+test('template:save for a deleted template broadcasts templates:updated', async () => {
+  const { s, room } = serverOnMat1();
+  s.config = { tvCodes: [], classTemplates: [], branding: {}, profiles: [] };
+
+  const broadcasts = [];
+  room.broadcast = (msg) => { try { broadcasts.push(JSON.parse(msg)); } catch {} };
+
+  await send(s, { type: 'template:save', name: 'Round Robin', settings: { roundDuration: 300 } });
+  const id = s.config.classTemplates[0]?.id;
+  assert.ok(id, 'precondition: template created');
+
+  s.config.classTemplates = []; // simulate concurrent delete
+
+  const countBefore = broadcasts.filter(b => b.type === 'templates:updated').length;
+  await send(s, { type: 'template:save', id, name: 'Updated', settings: {} });
+  const countAfter = broadcasts.filter(b => b.type === 'templates:updated').length;
+
+  assert.ok(countAfter > countBefore, 'templates:updated broadcast sent on concurrent-delete no-op');
+});
+
+// Bug 6: when onAlarm cannot recover a slot's timer state from storage it
+// must set a {running:true} sentinel to prevent a pending idle sweep firing.
+test('onAlarm storage error sets a running sentinel to block an idle sweep', async () => {
+  const { s, room } = serverOnMat1();
+  s._idleSweepRecovered = true;
+  s.idleSweepAt[1] = Date.now() - 1; // overdue sweep
+  s.timerStates[1] = null;            // simulate hibernation
+
+  const origGet = room.storage.get.bind(room.storage);
+  room.storage.get = async (k) => {
+    if (k === 'timerState:1') throw new Error('transient storage error');
+    return origGet(k);
+  };
+
+  await s.onAlarm();
+
+  assert.equal(s.timerStates[1]?.running, true, 'sentinel {running:true} set on storage error');
+  assert.ok(s.idleSweepAt[1] !== 0, 'idle sweep blocked by sentinel');
+});
+
+// Bug 7: idleSweepAt must be read from storage exactly once per wake cycle,
+// not on every 1 Hz tick throughout a normal class.
+test('onAlarm reads idleSweepAt from storage only once per wake cycle', async () => {
+  const { s, room } = serverOnMat1();
+  await start(s);
+
+  let reads = 0;
+  const origGet = room.storage.get.bind(room.storage);
+  room.storage.get = async (k) => { if (k === 'idleSweepAt') reads++; return origGet(k); };
+
+  await s.onAlarm();
+  assert.equal(reads, 1, 'reads idleSweepAt once on first tick after wake');
+
+  advance(1); await s.onAlarm();
+  advance(1); await s.onAlarm();
+  assert.equal(reads, 1, 'does not re-read idleSweepAt on subsequent ticks');
+});
+
+// ─── Client-side duration change bug ─────────────────────────────────
+// User sets 5 min, starts, pauses at 4 min (240 sec remaining), then tries
+// to increase duration to 6+ min. Client must clamp to current timeRemaining
+// when paused mid-round, not blindly set to new roundDuration.
+test('paused mid-round: increasing duration clamps timeRemaining to current value', async () => {
+  const { s } = serverOnMat1({ roundDuration: 300 });
+  await start(s);
+  advance(60);           // 1 minute elapsed: 240 sec remaining
+  await s.onAlarm();     // process elapsed time
+  await send(s, { type: 'timer:pause' });
+
+  assert.equal(s.timerStates[1].running, false);
+  assert.equal(s.timerStates[1].roundDuration, 300);
+  assert.equal(s.timerStates[1].timeRemaining, 240);
+
+  // User increases duration to 6 min (360 sec)
+  await send(s, { type: 'timer:config', roundDuration: 360 });
+
+  // Server should NOT add time mid-round (unfair) — clamp to current 240 sec
+  assert.equal(s.timerStates[1].roundDuration, 360);
+  assert.equal(s.timerStates[1].timeRemaining, 240, 'timeRemaining clamped to current value, not increased to 360');
+});
+
+test('paused mid-round: decreasing duration clamps timeRemaining down', async () => {
+  const { s } = serverOnMat1({ roundDuration: 300 });
+  await start(s);
+  advance(60);
+  await s.onAlarm();
+  await send(s, { type: 'timer:pause' });
+
+  assert.equal(s.timerStates[1].timeRemaining, 240);
+
+  // User decreases duration to 2 min (120 sec)
+  await send(s, { type: 'timer:config', roundDuration: 120 });
+
+  // Server should clamp down: 240 > 120, so set to 120
+  assert.equal(s.timerStates[1].roundDuration, 120);
+  assert.equal(s.timerStates[1].timeRemaining, 120, 'timeRemaining clamped down to new roundDuration');
+});
+
+test('paused at full duration: changing duration updates timeRemaining freely', async () => {
+  const { s } = serverOnMat1({ roundDuration: 300 });
+  await send(s, { type: 'timer:pause' }); // pause before starting
+
+  assert.equal(s.timerStates[1].timeRemaining, 300);
+  assert.equal(s.timerStates[1].roundDuration, 300);
+
+  // Change to 2 min (at full duration, so should allow it)
+  await send(s, { type: 'timer:config', roundDuration: 120 });
+  assert.equal(s.timerStates[1].timeRemaining, 120);
+
+  // Change back to 5 min (still at full duration of 120, now increasing to 300)
+  await send(s, { type: 'timer:config', roundDuration: 300 });
+  assert.equal(s.timerStates[1].timeRemaining, 300, 'can increase when at full duration');
+});

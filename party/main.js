@@ -106,36 +106,37 @@ export default class BjjTimerServer {
     return [role];
   }
 
-  // The demo room is intentionally open — everything else requires a token
-  // minted by /api/room-token once REQUIRE_AUTH is enabled.
-  get _isDemo() { return this.room.id.toLowerCase() === 'demo'; }
   get _authRequired() { return String(this.room.env.REQUIRE_AUTH) === '1'; }
 
   // Returns the token payload ({ room, role, sub, exp }) or null.
-  async _checkAuth(token) {
+  // roomId must be passed explicitly — this.room.id is unreliable in the HTTP
+  // request path on some PartyKit versions (throws "Party.id not yet initialized").
+  async _checkAuth(token, roomId) {
     const secret = this.room.env.PARTY_AUTH_SECRET;
     if (!secret || !token) return null;
-    return verifyRoomToken(token, String(secret), this.room.id.toUpperCase());
+    return verifyRoomToken(token, String(secret), roomId.toUpperCase());
   }
 
   async onConnect(connection, ctx) {
     if (!this.config) await this.onStart();
-    const url  = new URL(ctx.request.url);
-    const role = url.searchParams.get('role') || 'display';
+    const url    = new URL(ctx.request.url);
+    const segs   = url.pathname.split('/').filter(Boolean);
+    const roomId = segs[2] || '';
+    const role   = url.searchParams.get('role') || 'display';
 
     if (role === 'controller') {
       // Controllers drive a mat's timer, so they must be authed; TVs/displays
       // are receive-only (a TV additionally proves its mat code).
       let auth = null;
-      if (!this._isDemo) {
-        auth = await this._checkAuth(url.searchParams.get('token'));
+      if (roomId.toLowerCase() !== 'demo') {
+        auth = await this._checkAuth(url.searchParams.get('token'), roomId);
         if (!auth) {
           if (this._authRequired) {
             connection.send(JSON.stringify({ type: 'error', code: 'auth', msg: 'Not authorized for this room — please sign in again' }));
             connection.close();
             return;
           }
-          console.log(`[auth warn-only] room ${this.room.id}: controller connect without valid token`);
+          console.log(`[auth warn-only] room ${roomId}: controller connect without valid token`);
         }
       }
       const name      = decodeURIComponent(url.searchParams.get('name') || 'Unnamed Class');
@@ -231,12 +232,20 @@ export default class BjjTimerServer {
 
       // One timer on the primary mat; the rest of the group mirrors it. A coach
       // reclaiming their own session keeps the live timer; anyone else starts clean.
-      if (!this.timerStates[primary] || !reclaim) {
+      // Preserve a running timer even on non-reclaim (matClientId lost after DO
+      // hibernation): destroying a mid-class fight would be worse than letting the
+      // reconnecting controller take it over.
+      const preservingRunning = !reclaim && !!this.timerStates[primary]?.running;
+      if (!this.timerStates[primary] || (!reclaim && !preservingRunning)) {
         this.timerStates[primary] = this._newTimerState();
       }
-      this.timerStates[primary].mats = bound.slice();
+      // Don't overwrite the running timer's mat group — its existing ts.mats is correct.
+      if (!preservingRunning) {
+        this.timerStates[primary].mats = bound.slice();
+      }
       // A different coach starts with a clean stopwatch + tab too; a reclaim keeps them.
-      if (!reclaim) {
+      // When preserving a running timer across hibernation, also keep the stopwatch/tab.
+      if (!reclaim && !preservingRunning) {
         this.swStates[primary] = null;
         this.activeTab[primary] = 'timer';
         this.room.storage.delete('stopwatchState:' + primary).catch(() => {});
@@ -423,7 +432,8 @@ export default class BjjTimerServer {
         const name = (msg.name || 'Unnamed Template').slice(0, 60);
         if (msg.id) {
           const tpl = this.config.classTemplates.find(t => t.id === msg.id);
-          if (tpl) { tpl.name = name; tpl.settings = settings; }
+          if (!tpl) { this._broadcastTemplatesUpdated(); break; } // concurrently deleted — correct stale clients
+          tpl.name = name; tpl.settings = settings;
         } else {
           if (this.config.classTemplates.length >= 50) return;
           this.config.classTemplates.push({
@@ -539,12 +549,21 @@ export default class BjjTimerServer {
         if (!ctrl) return;
         const ts = this.timerStates[ctrl.slot] || (this.timerStates[ctrl.slot] = this._newTimerState());
         const prevRound = ts.roundDuration;
+        const prevRest = ts.restDuration;
         const allowed = ['roundDuration','restDuration','totalRounds','warningEnabled','warningThreshold','showRound'];
         for (const k of allowed) { if (msg[k] !== undefined) ts[k] = msg[k]; }
         if (!ts.running) {
-          // When duration changes while paused, sync timeRemaining to the new duration
-          if (msg.roundDuration !== undefined && msg.roundDuration !== prevRound) {
-            ts.timeRemaining = ts.roundDuration;
+          if (msg.roundDuration !== undefined && msg.roundDuration !== prevRound && ts.phase === 'fight') {
+            // At full duration (round not yet started): sync to the new value.
+            // Mid-round pause: preserve position but clamp down if new duration is shorter.
+            ts.timeRemaining = ts.timeRemaining >= prevRound
+              ? ts.roundDuration
+              : Math.min(ts.timeRemaining, ts.roundDuration);
+          }
+          if (msg.restDuration !== undefined && msg.restDuration !== prevRest && ts.phase === 'rest') {
+            ts.timeRemaining = ts.timeRemaining >= prevRest
+              ? ts.restDuration
+              : Math.min(ts.timeRemaining, ts.restDuration);
           }
           ts.startedAt = null; ts.timeRemainingAtStart = 0;
         } else if (msg.roundDuration !== undefined && msg.roundDuration !== prevRound && ts.phase === 'fight') {
@@ -552,6 +571,10 @@ export default class BjjTimerServer {
           // current round at the new duration so the change takes effect now.
           ts.timeRemaining = ts.roundDuration;
           ts.timeRemainingAtStart = ts.roundDuration;
+          ts.startedAt = Date.now();
+        } else if (msg.restDuration !== undefined && msg.restDuration !== prevRest && ts.phase === 'rest') {
+          ts.timeRemaining = ts.restDuration;
+          ts.timeRemainingAtStart = ts.restDuration;
           ts.startedAt = Date.now();
         }
         this._broadcastTimerState(ctrl.slot);
@@ -589,15 +612,18 @@ export default class BjjTimerServer {
     if (!this.config) await this.onStart();
 
     // Room REST is controller/owner surface — require a room token outside demo.
+    // Use segments[2] (the room code from the URL path) instead of this.room.id —
+    // this.room.id is unreliable in the HTTP handler on some PartyKit versions.
+    const roomId = (segments[2] || '').toUpperCase();
     let auth = null;
-    if (!this._isDemo) {
+    if (roomId !== 'DEMO') {
       const bearer = (req.headers.get('authorization') || '').replace('Bearer ', '');
-      auth = await this._checkAuth(bearer);
+      auth = await this._checkAuth(bearer, roomId);
       if (!auth) {
         if (this._authRequired) {
           return Response.json({ error: 'Not authorized' }, { status: 401, headers: cors });
         }
-        console.log(`[auth warn-only] room ${this.room.id}: ${req.method} ${apiPath} without valid token`);
+        console.log(`[auth warn-only] room ${roomId}: ${req.method} ${apiPath} without valid token`);
       }
     }
     // Destructive routes are owner/admin only (once a token is present to say so).
@@ -868,26 +894,50 @@ export default class BjjTimerServer {
   // method named alarm() is never invoked, which silently stops the timer tick.
   async onAlarm() {
     const now = Date.now();
+
+    // On the first alarm after DO hibernation, recover idleSweepAt and swStates
+    // from storage. _idleSweepRecovered is in-memory so it resets to falsy after
+    // hibernation, ensuring exactly one recovery read per wake cycle.
+    if (!this._idleSweepRecovered) {
+      try {
+        const saved = await this.room.storage.get('idleSweepAt');
+        if (saved) Object.assign(this.idleSweepAt, saved);
+      } catch {}
+      this._idleSweepRecovered = true;
+    }
+
     for (let slot = 1; slot <= 4; slot++) {
-      // Recover in-memory state after DO hibernation
-      if (!this.timerStates[slot]) {
-        const saved = await this.room.storage.get('timerState:' + slot);
-        if (saved) this.timerStates[slot] = saved;
-      }
-      const ts = this.timerStates[slot];
-      if (!ts?.running || !ts.startedAt) continue;
-      const elapsed = Math.floor((now - ts.startedAt) / 1000);
-      ts.timeRemaining = ts.timeRemainingAtStart - elapsed;
-      if (ts.timeRemaining <= 0) {
-        await this._handlePhaseEnd(slot);
-      } else {
-        if (ts.phase === 'fight' && ts.timeRemaining <= 10) {
-          this._sendSoundToTvs(slot, ts.timeRemaining <= 3 ? 'accent' : 'beep');
+      try {
+        // Recover in-memory state after DO hibernation
+        if (!this.timerStates[slot]) {
+          const saved = await this.room.storage.get('timerState:' + slot);
+          if (saved) this.timerStates[slot] = saved;
         }
-        this._broadcastTimerState(slot);
+        if (!this.swStates[slot]) {
+          const saved = await this.room.storage.get('stopwatchState:' + slot);
+          if (saved) this.swStates[slot] = saved;
+        }
+        const ts = this.timerStates[slot];
+        if (!ts?.running || !ts.startedAt) continue;
+        const elapsed = Math.floor((now - ts.startedAt) / 1000);
+        ts.timeRemaining = ts.timeRemainingAtStart - elapsed;
+        if (ts.timeRemaining <= 0) {
+          await this._handlePhaseEnd(slot);
+        } else {
+          if (ts.phase === 'fight' && ts.timeRemaining <= 10) {
+            this._sendSoundToTvs(slot, ts.timeRemaining <= 3 ? 'accent' : 'beep');
+          }
+          this._broadcastTimerState(slot);
+        }
+      } catch (e) {
+        console.error(`onAlarm slot ${slot}:`, e);
+        // Can't verify timer state — treat as running to block any pending idle sweep.
+        if (!this.timerStates[slot]) this.timerStates[slot] = { running: true };
       }
     }
-    this._runIdleSweeps(now);
+
+    try { this._runIdleSweeps(now); } catch (e) { console.error('onAlarm sweeps:', e); }
+
     // Keep ticking while any mat is running, or while an idle sweep is pending
     // (so an abandoned/ended class still returns its TV to the clock). setAlarm
     // replaces any existing alarm, so this is safe to call unconditionally.
@@ -904,7 +954,7 @@ export default class BjjTimerServer {
     for (let p = 1; p <= 4; p++) {
       const due = this.idleSweepAt[p];
       if (!due) continue;
-      if (this.ctrlSlots[p]) { this.idleSweepAt[p] = 0; changed = true; continue; } // reclaimed
+      if (this._isConnectionAlive(this.ctrlSlots[p])) { this.idleSweepAt[p] = 0; changed = true; continue; } // reclaimed
       if (this.timerStates[p]?.running) continue;                                    // still ticking — wait
       if (this.swStates[p]?.running) continue;                                       // live stopwatch — runs until a coach stops it
       if (now < due) continue;
@@ -932,6 +982,12 @@ export default class BjjTimerServer {
 
   _hasAnyRunning() {
     for (let i = 1; i <= 4; i++) { if (this.timerStates[i]?.running) return true; }
+    return false;
+  }
+
+  _isConnectionAlive(id) {
+    if (!id) return false;
+    for (const c of this.room.getConnections()) if (c.id === id) return true;
     return false;
   }
 
@@ -1002,7 +1058,7 @@ export default class BjjTimerServer {
         await this.room.storage.delete('timerState:' + slot);
         // If the coach already left (e.g. phone asleep), let the TV show "TIME!"
         // briefly, then return it to the idle clock via the sweep.
-        if (!this.ctrlSlots[slot]) this._scheduleIdleSweep(slot, BjjTimerServer.END_IDLE_DELAY_MS);
+        if (!this._isConnectionAlive(this.ctrlSlots[slot])) this._scheduleIdleSweep(slot, BjjTimerServer.END_IDLE_DELAY_MS);
       } else if (ts.restDuration > 0) {
         ts.phase = 'rest'; ts.timeRemaining = ts.restDuration;
         ts.startedAt = Date.now(); ts.timeRemainingAtStart = ts.restDuration;
