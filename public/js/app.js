@@ -5,6 +5,12 @@ const PARTYKIT_HOST = window.PARTYKIT_HOST || 'localhost:1999';
 const _urlParams = new URLSearchParams(location.search);
 let roomId = _urlParams.get('room') || null;
 
+// Capture referral code from ?ref= and persist for signup
+(function() {
+  const ref = _urlParams.get('ref');
+  if (ref && /^[A-Za-z0-9]{4,12}$/.test(ref)) localStorage.setItem('mattimer_ref', ref);
+})();
+
 let socket = null;        // PartySocket, created when role is chosen
 let mode   = null;        // 'controller' | 'display' | null
 let _displayTvCode = null;
@@ -394,7 +400,7 @@ async function submitSignup() {
     const res  = await fetch('/api/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, gymName, email, website: document.getElementById('signupWebsite')?.value || '' }),
+      body: JSON.stringify({ name, gymName, email, website: document.getElementById('signupWebsite')?.value || '', referredBy: localStorage.getItem('mattimer_ref') || '' }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -687,6 +693,38 @@ async function showOnboardingIfNeeded() {
 function dismissOnboarding() {
   if (_gymId) localStorage.setItem('onboarding_dismissed_' + _gymId, '1');
   document.getElementById('onboardingCard').style.display = 'none';
+}
+
+function _maybeShowReferralPrompt() {
+  if (_gymRole !== 'owner' || !_gymId || !roomId) return;
+  const key = 'mattimer_ref_prompt_' + _gymId;
+  if (localStorage.getItem(key)) return;
+  localStorage.setItem(key, '1');
+  setTimeout(() => {
+    const link = `${location.origin}/landing.html?ref=${roomId}`;
+    const input = document.getElementById('referralLinkInput');
+    if (input) input.value = link;
+    const card = document.getElementById('referralCard');
+    if (card) card.style.display = 'block';
+  }, 10000);
+}
+
+function dismissReferral() {
+  const card = document.getElementById('referralCard');
+  if (card) card.style.display = 'none';
+}
+
+function copyReferralLink() {
+  const input = document.getElementById('referralLinkInput');
+  if (!input) return;
+  const btn = document.getElementById('referralCopyBtn');
+  navigator.clipboard.writeText(input.value).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy link'; }, 2000);
+  }).catch(() => {
+    input.select();
+    document.execCommand('copy');
+  });
 }
 
 async function _afterAuth(user) {
@@ -1787,6 +1825,14 @@ function _onMessage(event) {
         // Reconnect (sleep/resume) or taking over a live round: adopt the
         // server's authoritative timer so we pick up exactly where it is.
         applyControllerStateSnapshot(msg.timerState, { silent: true });
+        // silent:true above skips the phase-transition diff that normally drives
+        // Spotify pause/resume (it has no real "previous phase" to diff against,
+        // and we don't want to replay a backlog of bells after a long reconnect).
+        // But Spotify pause/resume is idempotent, so unlike the bell it's safe —
+        // and necessary — to sync directly off the landed phase every reconnect.
+        // Without this, a round that ends while the phone is backgrounded (e.g.
+        // the coach switched to the Spotify app to hit play) never gets paused.
+        _syncSpotifyToPhase(msg.timerState);
       }
       // On a reconnect/takeover (not a deliberate fresh login), also restore the
       // server-owned stopwatch and active tab so an iOS-sleep resume continues.
@@ -2047,6 +2093,7 @@ function startTimer(silent = false) {
   // Optimistic UI — server state will confirm within one tick
   state.running = true;
   _updateStartPauseBtn(); updateUI();
+  _maybeShowReferralPrompt();
 }
 
 function pauseTimer() {
@@ -2068,6 +2115,21 @@ function nextRound() {
   if (state.currentRound < state.totalRounds) state.currentRound++;
   state.phase = 'fight'; state.timeRemaining = state.roundDuration;
   _updateStartPauseBtn(); updateUI();
+}
+
+// Syncs Spotify playback to the phase we're landing on after a silent state
+// apply (reconnect), since that path skips the normal transition-diff logic.
+// See the call site in the 'config' handler for why this is needed.
+function _syncSpotifyToPhase(s) {
+  if (mode !== 'controller' || !window.spotifyEnabled?.()) return;
+  const opts = window.spotifyOpts();
+  if (s.phase === 'rest') {
+    if (opts.pauseRest) window.spotifyPause();
+  } else if (s.phase === 'fight' && s.running) {
+    window.spotifyResume();
+  } else if (s.phase === 'fight' && !s.running && s.timeRemaining === 0) {
+    if (opts.pauseEnd) window.spotifyPause();
+  }
 }
 
 // Applies state received from the server to the controller UI and plays sounds

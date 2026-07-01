@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/main.css?v=53">
+  <link rel="stylesheet" href="/css/main.css?v=54">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0D0D0D; color: var(--mat-text); font-family: 'Barlow', sans-serif; }
@@ -102,7 +102,7 @@
     .lp-hero-ctas {
       display: flex; flex-wrap: wrap;
       gap: .75rem; justify-content: center;
-      margin-bottom: 3rem;
+      margin-bottom: 1.5rem;
     }
     .lp-demo-link {
       font-family: 'Barlow Condensed', sans-serif;
@@ -113,6 +113,34 @@
       display: flex; align-items: center; gap: .3rem;
     }
     .lp-demo-link:hover { color: var(--mat-gold); }
+    .lp-waitlist {
+      margin-bottom: 2.5rem;
+      display: flex; flex-direction: column; align-items: center; gap: .55rem;
+    }
+    .lp-waitlist-sep {
+      font-size: .72rem; color: rgba(255,255,255,.2);
+      letter-spacing: .14em; text-transform: uppercase; margin-top: .25rem;
+    }
+    .lp-waitlist-form {
+      display: flex; gap: .45rem; flex-wrap: wrap; justify-content: center;
+    }
+    .lp-waitlist-form input[type="email"] {
+      background: #1A1A1A; border: 1px solid #3A3A3A;
+      border-radius: 4px; padding: .48rem .85rem;
+      font-family: 'Barlow', sans-serif; font-size: .88rem;
+      color: var(--mat-text); outline: none; width: 215px;
+    }
+    .lp-waitlist-form input[type="email"]::placeholder { color: rgba(255,255,255,.28); }
+    .lp-waitlist-form input[type="email"]:focus { border-color: rgba(212,160,23,.45); }
+    .lp-waitlist-form button {
+      background: transparent; border: 1px solid rgba(212,160,23,.38);
+      border-radius: 4px; padding: .48rem .9rem;
+      font-family: 'Barlow Condensed', sans-serif; font-size: .82rem;
+      letter-spacing: .08em; color: rgba(212,160,23,.75);
+      cursor: pointer; transition: border-color .15s, color .15s;
+    }
+    .lp-waitlist-form button:hover { border-color: var(--mat-gold); color: var(--mat-gold); }
+    .lp-waitlist-msg { font-size: .8rem; color: var(--mat-muted); min-height: 1.1em; }
     .lp-hero-shot {
       width: 100%; max-width: 720px;
       aspect-ratio: 16/9;
@@ -364,6 +392,14 @@
     <a href="/?signup=1" class="btn btn-gold" style="font-size:1.05rem;padding:.8rem 1.75rem">Start Free Trial — 30 Days Free</a>
     <a href="/?room=demo" class="lp-demo-link">Try the Demo →</a>
   </div>
+  <div class="lp-waitlist">
+    <p class="lp-waitlist-sep">or</p>
+    <form class="lp-waitlist-form" id="waitlistForm">
+      <input type="email" name="email" placeholder="coach@yourgym.com" required autocomplete="email">
+      <button type="submit">Get Early Access Updates</button>
+    </form>
+    <p class="lp-waitlist-msg" id="waitlistMsg"></p>
+  </div>
   <!-- Replace src with your screenshot once taken -->
   <div class="lp-shot lp-hero-shot">
     [SCREENSHOT 1: TV display — active round countdown, e.g. "Round 2 of 3 · 4:23 · FIGHT"]
@@ -590,6 +626,7 @@
   <a href="/?signup=1" class="btn btn-gold" style="font-size:1.1rem;padding:.9rem 2rem">Start Free Trial</a>
   <div>
     <a href="/?room=demo" class="lp-demo-link">Try the Demo first →</a>
+    <a href="/calculator.html" class="lp-demo-link" style="margin-top:.35rem">Calculate how many rounds fit in your class →</a>
   </div>
 </section>
 
@@ -599,5 +636,40 @@
   <a href="mailto:robreed64@gmail.com">robreed64@gmail.com</a>
 </footer>
 
+<script>
+  // Capture ?ref= referral code and persist for signup
+  (function() {
+    const ref = new URLSearchParams(location.search).get('ref');
+    if (ref && /^[A-Za-z0-9]{4,12}$/.test(ref)) localStorage.setItem('mattimer_ref', ref);
+  })();
+
+  document.getElementById('waitlistForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const msg = document.getElementById('waitlistMsg');
+    const btn = this.querySelector('button');
+    const email = this.email.value.trim();
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      const r = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      if (r.ok) {
+        this.style.display = 'none';
+        msg.textContent = "You're on the list. We'll be in touch.";
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Get Early Access Updates';
+        msg.textContent = 'Something went wrong — try again.';
+      }
+    } catch {
+      btn.disabled = false;
+      btn.textContent = 'Get Early Access Updates';
+      msg.textContent = 'Something went wrong — try again.';
+    }
+  });
+</script>
 </body>
 </html>

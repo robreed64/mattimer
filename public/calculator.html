@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BJJ Class Round Calculator — matround.com</title>
+  <meta name="description" content="Free tool for BJJ coaches: enter your class length and round format, see exactly how many rounds fit. Load the result to your gym TVs in one tap.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/main.css?v=54">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0D0D0D; color: var(--mat-text); font-family: 'Barlow', sans-serif; min-height: 100vh; }
+    a { color: inherit; text-decoration: none; }
+
+    .nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #141414; border-bottom: 1px solid #2A2A2A;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 1.5rem; height: 52px;
+    }
+    .nav-brand {
+      font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem;
+      letter-spacing: .12em; color: var(--mat-gold);
+    }
+    .nav-actions { display: flex; align-items: center; gap: .75rem; }
+
+    .page { max-width: 680px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+
+    .eyebrow {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .75rem; font-weight: 600;
+      letter-spacing: .2em; text-transform: uppercase;
+      color: var(--mat-gold); margin-bottom: .6rem;
+    }
+    h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(2.2rem, 6vw, 3.5rem);
+      letter-spacing: .05em; line-height: 1;
+      margin-bottom: .75rem;
+    }
+    .sub {
+      font-size: 1rem; color: var(--mat-muted);
+      line-height: 1.55; margin-bottom: 2.5rem;
+      max-width: 520px;
+    }
+
+    /* ── CALCULATOR CARD ─────────────────────────────────────── */
+    .card {
+      background: #141414; border: 1px solid #2A2A2A;
+      border-radius: 8px; padding: 2rem;
+      margin-bottom: 1.5rem;
+    }
+    .card-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .72rem; font-weight: 600;
+      letter-spacing: .18em; text-transform: uppercase;
+      color: var(--mat-muted); margin-bottom: 1.25rem;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 480px) { .field-grid { grid-template-columns: 1fr; } }
+
+    .field { display: flex; flex-direction: column; gap: .35rem; }
+    .field label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .82rem; font-weight: 600;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--mat-text);
+    }
+    .field .unit {
+      font-size: .72rem; color: var(--mat-muted);
+      letter-spacing: .06em; text-transform: uppercase;
+    }
+    .field input[type="number"] {
+      background: #0D0D0D; border: 1px solid #3A3A3A;
+      border-radius: 4px; padding: .6rem .85rem;
+      font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem;
+      letter-spacing: .06em; color: var(--mat-text);
+      text-align: center; width: 100%; outline: none;
+      transition: border-color .15s;
+      -moz-appearance: textfield;
+    }
+    .field input[type="number"]::-webkit-inner-spin-button,
+    .field input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .field input[type="number"]:focus { border-color: rgba(212,160,23,.5); }
+
+    .divider {
+      border: none; border-top: 1px solid #2A2A2A;
+      margin: 1.5rem 0;
+    }
+
+    /* ── RESULTS ─────────────────────────────────────────────── */
+    .results { display: none; }
+    .results.visible { display: block; }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: .75rem; margin-bottom: 1.25rem;
+    }
+    @media (max-width: 420px) { .result-grid { grid-template-columns: 1fr 1fr; } }
+
+    .result-cell {
+      background: #0D0D0D; border: 1px solid #2A2A2A;
+      border-radius: 6px; padding: .85rem .75rem;
+      text-align: center;
+    }
+    .result-cell.highlight { border-color: rgba(212,160,23,.4); }
+    .result-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.4rem; line-height: 1;
+      color: var(--mat-text);
+    }
+    .result-cell.highlight .result-num { color: var(--mat-gold); }
+    .result-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .7rem; font-weight: 600;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--mat-muted); margin-top: .2rem;
+    }
+
+    .breakdown {
+      font-size: .88rem; color: var(--mat-muted);
+      line-height: 1.7; background: #0D0D0D;
+      border: 1px solid #2A2A2A; border-radius: 6px;
+      padding: .85rem 1rem; margin-bottom: 1rem;
+    }
+    .breakdown span { color: var(--mat-text); }
+
+    .warning {
+      font-size: .82rem; color: #e07b39;
+      background: rgba(224,123,57,.08);
+      border: 1px solid rgba(224,123,57,.25);
+      border-radius: 6px; padding: .6rem .85rem;
+      margin-bottom: 1rem; display: none;
+    }
+    .warning.visible { display: block; }
+
+    /* ── CTA ─────────────────────────────────────────────────── */
+    .cta-block {
+      background: #141414; border: 1px solid rgba(212,160,23,.25);
+      border-radius: 8px; padding: 1.5rem;
+      text-align: center; margin-bottom: 1.5rem;
+    }
+    .cta-block p {
+      font-size: .9rem; color: var(--mat-muted);
+      line-height: 1.55; margin-bottom: 1rem;
+    }
+    .cta-block strong { color: var(--mat-text); }
+    .btn-gold {
+      display: inline-block;
+      background: var(--mat-gold); color: #000;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: .95rem; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase;
+      padding: .7rem 1.5rem; border-radius: 4px;
+      transition: opacity .15s;
+    }
+    .btn-gold:hover { opacity: .88; }
+
+    /* ── TEMPLATE TEASER ─────────────────────────────────────── */
+    .teaser {
+      border: 1px solid #2A2A2A; border-radius: 8px;
+      padding: 1.5rem;
+    }
+    .teaser h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.3rem; letter-spacing: .06em;
+      margin-bottom: .4rem;
+    }
+    .teaser p { font-size: .88rem; color: var(--mat-muted); line-height: 1.55; margin-bottom: 1rem; }
+    .teaser-form { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .teaser-form input[type="email"] {
+      flex: 1; min-width: 180px;
+      background: #141414; border: 1px solid #3A3A3A;
+      border-radius: 4px; padding: .55rem .85rem;
+      font-family: 'Barlow', sans-serif; font-size: .9rem;
+      color: var(--mat-text); outline: none;
+    }
+    .teaser-form input[type="email"]:focus { border-color: rgba(212,160,23,.45); }
+    .teaser-form input[type="email"]::placeholder { color: rgba(255,255,255,.28); }
+    .teaser-form button {
+      background: transparent; border: 1px solid rgba(212,160,23,.4);
+      border-radius: 4px; padding: .55rem 1rem;
+      font-family: 'Barlow Condensed', sans-serif; font-size: .82rem;
+      letter-spacing: .08em; color: rgba(212,160,23,.8);
+      cursor: pointer; transition: border-color .15s, color .15s;
+      white-space: nowrap;
+    }
+    .teaser-form button:hover { border-color: var(--mat-gold); color: var(--mat-gold); }
+    .teaser-msg { font-size: .8rem; color: var(--mat-muted); margin-top: .4rem; min-height: 1.1em; }
+
+    footer {
+      text-align: center; padding: 2rem 1.5rem;
+      font-size: .78rem; color: rgba(255,255,255,.2);
+      border-top: 1px solid #1A1A1A;
+    }
+    footer a { color: rgba(212,160,23,.5); }
+    footer a:hover { color: var(--mat-gold); }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/landing.html" class="nav-brand">BJJ MAT TIMER</a>
+  <div class="nav-actions">
+    <a href="/?login=1" class="btn btn-outline" style="font-size:.82rem;padding:.4rem .9rem">Sign In</a>
+    <a href="/?signup=1" class="btn btn-gold" style="font-size:.82rem;padding:.4rem .9rem">Start Free Trial</a>
+  </div>
+</nav>
+
+<main class="page">
+
+  <p class="eyebrow">Free Tool for BJJ Coaches</p>
+  <h1>How Many Rounds Fit in Your Class?</h1>
+  <p class="sub">Enter your class length and round format. See exactly how many sparring rounds fit — and how to fill the time. No email required.</p>
+
+  <!-- INPUT CARD -->
+  <div class="card">
+    <p class="card-title">Your Class</p>
+    <div class="field-grid">
+      <div class="field">
+        <label for="classLen">Class length <span class="unit">min</span></label>
+        <input type="number" id="classLen" value="90" min="30" max="240" step="5">
+      </div>
+      <div class="field">
+        <label for="warmup">Warm-up <span class="unit">min</span></label>
+        <input type="number" id="warmup" value="15" min="0" max="60" step="5">
+      </div>
+      <div class="field">
+        <label for="technique">Technique / drilling <span class="unit">min</span></label>
+        <input type="number" id="technique" value="20" min="0" max="90" step="5">
+      </div>
+      <div class="field">
+        <label for="cooldown">Cool-down <span class="unit">min</span></label>
+        <input type="number" id="cooldown" value="5" min="0" max="30" step="5">
+      </div>
+    </div>
+
+    <hr class="divider">
+    <p class="card-title">Round Format</p>
+    <div class="field-grid">
+      <div class="field">
+        <label for="roundLen">Round length <span class="unit">min</span></label>
+        <input type="number" id="roundLen" value="5" min="1" max="30" step="1">
+      </div>
+      <div class="field">
+        <label for="restSec">Rest between rounds <span class="unit">sec</span></label>
+        <input type="number" id="restSec" value="60" min="0" max="300" step="15">
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results" id="results">
+
+    <div class="warning" id="warning"></div>
+
+    <div class="card">
+      <p class="card-title">Your Class Fits</p>
+      <div class="result-grid">
+        <div class="result-cell highlight">
+          <div class="result-num" id="rRounds">—</div>
+          <div class="result-label">Rounds</div>
+        </div>
+        <div class="result-cell">
+          <div class="result-num" id="rSparring">—</div>
+          <div class="result-label">Min sparring</div>
+        </div>
+        <div class="result-cell">
+          <div class="result-num" id="rLeftover">—</div>
+          <div class="result-label">Min remaining</div>
+        </div>
+      </div>
+
+      <div class="breakdown" id="breakdown"></div>
+    </div>
+
+    <div class="cta-block">
+      <p>This format is built into Mat Timer as a one-tap preset.<br>
+      <strong>Load it to every TV in your gym in 60 seconds.</strong></p>
+      <a href="/?signup=1" class="btn-gold">Start Free Trial — 30 Days Free</a>
+    </div>
+
+  </div>
+
+  <!-- TEMPLATE TEASER -->
+  <div class="teaser">
+    <h3>Want 10 Ready-to-Use Class Formats?</h3>
+    <p>Sparring, drilling, competition prep, beginner classes — pre-built formats you can load to your gym TVs in one tap. Free.</p>
+    <form class="teaser-form" id="teaserForm">
+      <input type="email" name="email" placeholder="coach@yourgym.com" required autocomplete="email">
+      <button type="submit">Send Me the Templates</button>
+    </form>
+    <p class="teaser-msg" id="teaserMsg"></p>
+  </div>
+
+</main>
+
+<footer>
+  <a href="/landing.html">matround.com</a> &nbsp;·&nbsp; Wall TV timers for BJJ gyms &nbsp;·&nbsp; <a href="mailto:robreed64@gmail.com">robreed64@gmail.com</a>
+</footer>
+
+<script>
+  const ids = ['classLen','warmup','technique','cooldown','roundLen','restSec'];
+  ids.forEach(id => document.getElementById(id).addEventListener('input', calc));
+
+  function fmt(min) {
+    if (min < 1) return '0';
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h === 0) return String(m);
+    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  }
+
+  function calc() {
+    const classLen  = +document.getElementById('classLen').value  || 0;
+    const warmup    = +document.getElementById('warmup').value    || 0;
+    const technique = +document.getElementById('technique').value || 0;
+    const cooldown  = +document.getElementById('cooldown').value  || 0;
+    const roundMin  = +document.getElementById('roundLen').value  || 5;
+    const restMin   = (+document.getElementById('restSec').value  || 0) / 60;
+
+    const results  = document.getElementById('results');
+    const warning  = document.getElementById('warning');
+
+    const available = classLen - warmup - technique - cooldown;
+
+    if (available <= 0) {
+      warning.textContent = 'Your warm-up, technique time, and cool-down exceed your class length. Reduce one of them.';
+      warning.classList.add('visible');
+      results.classList.add('visible');
+      document.getElementById('rRounds').textContent = '0';
+      document.getElementById('rSparring').textContent = '0';
+      document.getElementById('rLeftover').textContent = '0';
+      document.getElementById('breakdown').textContent = '';
+      return;
+    }
+
+    warning.classList.remove('visible');
+
+    // N rounds take: N × roundMin + (N-1) × restMin ≤ available
+    // → N ≤ (available + restMin) / (roundMin + restMin)
+    const rounds = Math.max(0, Math.floor((available + restMin) / (roundMin + restMin)));
+    const sparringTime = rounds * roundMin;
+    const restTime = Math.max(0, rounds - 1) * restMin;
+    const blockTime = sparringTime + restTime;
+    const leftover = Math.round((available - blockTime) * 10) / 10;
+
+    document.getElementById('rRounds').textContent = rounds;
+    document.getElementById('rSparring').textContent = Math.round(sparringTime);
+    document.getElementById('rLeftover').textContent = leftover <= 0 ? '0' : String(Math.round(leftover));
+
+    const restDisplay = restMin >= 1
+      ? `${Math.round(restMin)}min`
+      : `${Math.round(restMin * 60)}sec`;
+
+    let bd = `Warm-up: ${warmup} min  ·  Technique: ${technique} min  ·  `;
+    if (rounds > 0) {
+      bd += `Sparring: ${rounds} × ${roundMin}min / ${restDisplay} rest = ${Math.round(blockTime)} min  ·  `;
+    }
+    bd += `Cool-down: ${cooldown} min`;
+    if (leftover > 0) bd += `  ·  Buffer: ${Math.round(leftover)} min`;
+
+    document.getElementById('breakdown').textContent = bd;
+
+    if (rounds === 0) {
+      warning.textContent = `Only ${Math.round(available)} minutes available for sparring — not enough for one ${roundMin}-minute round. Try shorter rounds or reduce your technique time.`;
+      warning.classList.add('visible');
+    }
+
+    results.classList.add('visible');
+  }
+
+  // Run on load with defaults
+  calc();
+
+  // Template email capture
+  document.getElementById('teaserForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const msg = document.getElementById('teaserMsg');
+    const btn = this.querySelector('button');
+    const email = this.email.value.trim();
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      const r = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      if (r.ok) {
+        this.style.display = 'none';
+        msg.textContent = "You're on the list — we'll send the templates shortly.";
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Send Me the Templates';
+        msg.textContent = 'Something went wrong — try again.';
+      }
+    } catch {
+      btn.disabled = false;
+      btn.textContent = 'Send Me the Templates';
+      msg.textContent = 'Something went wrong — try again.';
+    }
+  });
+</script>
+
+</body>
+</html>

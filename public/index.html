@@ -19,7 +19,7 @@
 <script src="/js/spotify.js"></script>
 <script src="/partysocket.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<link rel="stylesheet" href="/css/main.css?v=53">
+<link rel="stylesheet" href="/css/main.css?v=55">
 </head>
 <body>
 
@@ -252,6 +252,19 @@
       <button onclick="dismissOnboarding()" style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-family:var(--font-ui);font-size:.7rem;letter-spacing:.1em;padding:.15rem .4rem;border-radius:3px;border:1px solid var(--mat-border)">Dismiss</button>
     </div>
     <div id="onboardingSteps" style="display:flex;flex-direction:column;gap:.5rem"></div>
+  </div>
+
+  <!-- Referral prompt — shown once, 10s after first timer start -->
+  <div id="referralCard" style="display:none;width:100%;max-width:680px;background:var(--mat-panel);border:1px solid rgba(212,160,23,.25);border-radius:6px;padding:1rem 1.25rem;margin-top:.5rem;box-sizing:border-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+      <span style="font-family:var(--font-ui);font-size:.75rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--mat-gold)">Know Another Gym?</span>
+      <button onclick="dismissReferral()" style="background:none;border:none;color:var(--mat-muted);cursor:pointer;font-family:var(--font-ui);font-size:.7rem;letter-spacing:.1em;padding:.15rem .4rem;border-radius:3px;border:1px solid var(--mat-border)">Dismiss</button>
+    </div>
+    <p style="font-family:var(--font-body);font-size:.85rem;color:var(--mat-muted);line-height:1.5;margin-bottom:.75rem">Refer another BJJ gym — when they subscribe, you both get a free month.</p>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+      <input id="referralLinkInput" type="text" readonly style="flex:1;min-width:160px;background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:3px;color:var(--mat-muted);font-family:var(--font-ui);font-size:.78rem;letter-spacing:.04em;padding:.4rem .65rem;outline:none">
+      <button onclick="copyReferralLink()" id="referralCopyBtn" style="background:transparent;border:1px solid rgba(212,160,23,.4);border-radius:3px;padding:.4rem .75rem;font-family:var(--font-ui);font-size:.78rem;letter-spacing:.08em;color:rgba(212,160,23,.8);cursor:pointer;white-space:nowrap;flex-shrink:0">Copy link</button>
+    </div>
   </div>
 
 
@@ -882,8 +895,8 @@
   </div>
 </div>
 
-<script src="/js/progress.js?v=53"></script>
-<script src="/js/app.js?v=53"></script>
+<script src="/js/progress.js?v=54"></script>
+<script src="/js/app.js?v=55"></script>
 
 </body>
 </html>
