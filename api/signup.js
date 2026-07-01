@@ -9,7 +9,7 @@ module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { name, gymName, website } = req.body || {};
+  const { name, gymName, website, referredBy } = req.body || {};
   const email = String((req.body || {}).email || '').trim().toLowerCase();
 
   // Honeypot: the hidden "website" field is invisible to humans — bots that
@@ -62,7 +62,7 @@ module.exports = async function handler(req, res) {
   const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const { data: gym, error: gymErr } = await admin
     .from('gyms')
-    .insert({ name: gymName.trim(), room_code: roomCode, subscription_status: 'trial', trial_ends_at: trialEnd })
+    .insert({ name: gymName.trim(), room_code: roomCode, subscription_status: 'trial', trial_ends_at: trialEnd, referred_by: referredBy?.trim() || null })
     .select()
     .single();
 
