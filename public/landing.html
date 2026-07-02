@@ -8,27 +8,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/main.css?v=54">
+  <link rel="stylesheet" href="/css/main.css?v=56">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0D0D0D; color: var(--mat-text); font-family: 'Barlow', sans-serif; }
     a { color: inherit; text-decoration: none; }
     img { display: block; max-width: 100%; border-radius: 8px; }
 
-    /* ── NAV ──────────────────────────────────────────────────── */
-    .lp-nav {
-      position: sticky; top: 0; z-index: 100;
-      background: #141414; border-bottom: 1px solid #2A2A2A;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 1.5rem; height: 52px;
-    }
-    .lp-nav-brand {
-      display: flex; align-items: center; gap: .6rem;
-      font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem;
-      letter-spacing: .12em; color: var(--mat-gold);
-    }
-    .lp-nav-brand svg { width: 26px; height: 26px; flex-shrink: 0; }
-    .lp-nav-actions { display: flex; align-items: center; gap: .75rem; }
+    /* NAV chrome (.marketing-nav*) is shared across marketing/tool pages —
+       defined once in public/css/main.css so landing.html and
+       calculator.html can't silently drift apart. */
 
     /* ── SECTION WRAPPERS ─────────────────────────────────────── */
     .lp-section {
@@ -357,7 +346,6 @@
     .lp-step-shot    { aspect-ratio: 16/9; max-height: none; }
   }
   @media (max-width: 600px) {
-    .lp-nav-brand span { display: none; }
     .lp-section, .lp-section-dark { padding: 3.5rem 1rem; }
     .lp-pain-grid { gap: 1rem; }
     .lp-steps     { gap: 2.5rem; }
@@ -368,8 +356,8 @@
 <body>
 
 <!-- ── NAV ─────────────────────────────────────────────────────── -->
-<nav class="lp-nav">
-  <a class="lp-nav-brand" href="/">
+<nav class="marketing-nav">
+  <a class="marketing-nav-brand" href="/">
     <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
       <circle cx="40" cy="40" r="36" fill="none" stroke="#D4A017" stroke-width="2"/>
       <path d="M20 55 Q30 25 40 40 Q50 55 60 25" fill="none" stroke="#C0392B" stroke-width="3" stroke-linecap="round"/>
@@ -377,7 +365,7 @@
     </svg>
     <span>BJJ MAT TIMER</span>
   </a>
-  <div class="lp-nav-actions">
+  <div class="marketing-nav-actions">
     <a href="/?login=1" class="btn btn-outline" style="font-size:.82rem;padding:.4rem .9rem">Sign In</a>
     <a href="/?signup=1" class="btn btn-gold" style="font-size:.82rem;padding:.4rem .9rem">Start Free Trial</a>
   </div>

@@ -4,6 +4,10 @@ const { applyCors } = require('./_lib/cors');
 const { checkSignupRate } = require('./_lib/rate-limit');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Matches the client-side capture regex in public/js/app.js (room codes are
+// short alphanumeric strings) — referredBy is optional metadata, so an
+// out-of-shape value is dropped rather than rejecting the whole signup.
+const REFERRED_BY_RE = /^[A-Za-z0-9]{4,12}$/;
 
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
@@ -58,11 +62,13 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: msg });
   }
 
+  const referredByClean = REFERRED_BY_RE.test(referredBy?.trim() || '') ? referredBy.trim() : null;
+
   // Create the gym with a 30-day trial
   const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const { data: gym, error: gymErr } = await admin
     .from('gyms')
-    .insert({ name: gymName.trim(), room_code: roomCode, subscription_status: 'trial', trial_ends_at: trialEnd, referred_by: referredBy?.trim() || null })
+    .insert({ name: gymName.trim(), room_code: roomCode, subscription_status: 'trial', trial_ends_at: trialEnd, referred_by: referredByClean })
     .select()
     .single();
 

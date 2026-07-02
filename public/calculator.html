@@ -8,23 +8,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/main.css?v=54">
+  <link rel="stylesheet" href="/css/main.css?v=56">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0D0D0D; color: var(--mat-text); font-family: 'Barlow', sans-serif; min-height: 100vh; }
     a { color: inherit; text-decoration: none; }
 
-    .nav {
-      position: sticky; top: 0; z-index: 100;
-      background: #141414; border-bottom: 1px solid #2A2A2A;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 1.5rem; height: 52px;
-    }
-    .nav-brand {
-      font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem;
-      letter-spacing: .12em; color: var(--mat-gold);
-    }
-    .nav-actions { display: flex; align-items: center; gap: .75rem; }
+    /* NAV chrome (.marketing-nav*) is shared across marketing/tool pages —
+       defined once in public/css/main.css so this page and landing.html
+       can't silently drift apart. */
 
     .page { max-width: 680px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
 
@@ -207,9 +199,9 @@
 </head>
 <body>
 
-<nav class="nav">
-  <a href="/landing.html" class="nav-brand">BJJ MAT TIMER</a>
-  <div class="nav-actions">
+<nav class="marketing-nav">
+  <a href="/landing.html" class="marketing-nav-brand">BJJ MAT TIMER</a>
+  <div class="marketing-nav-actions">
     <a href="/?login=1" class="btn btn-outline" style="font-size:.82rem;padding:.4rem .9rem">Sign In</a>
     <a href="/?signup=1" class="btn btn-gold" style="font-size:.82rem;padding:.4rem .9rem">Start Free Trial</a>
   </div>

@@ -695,12 +695,18 @@ function dismissOnboarding() {
   document.getElementById('onboardingCard').style.display = 'none';
 }
 
+let _referralPromptPending = false;
 function _maybeShowReferralPrompt() {
-  if (_gymRole !== 'owner' || !_gymId || !roomId) return;
+  if (_gymRole !== 'owner' || !_gymId || !roomId || _referralPromptPending) return;
   const key = 'mattimer_ref_prompt_' + _gymId;
   if (localStorage.getItem(key)) return;
-  localStorage.setItem(key, '1');
+  _referralPromptPending = true;
   setTimeout(() => {
+    // Mark as shown only once the card is actually about to display — setting
+    // it up front would permanently suppress the prompt if the coach closes
+    // the tab or navigates away within this 10s window, since it would then
+    // never actually be seen but would never be offered again either.
+    localStorage.setItem(key, '1');
     const link = `${location.origin}/landing.html?ref=${roomId}`;
     const input = document.getElementById('referralLinkInput');
     if (input) input.value = link;
@@ -717,10 +723,17 @@ function dismissReferral() {
 function copyReferralLink() {
   const input = document.getElementById('referralLinkInput');
   if (!input) return;
-  const btn = document.getElementById('referralCopyBtn');
+  // navigator.clipboard is undefined in insecure contexts and some older/
+  // embedded webviews — fall back straight to execCommand rather than letting
+  // `.writeText` throw synchronously and skip the fallback entirely.
+  if (!navigator.clipboard) {
+    input.select();
+    document.execCommand('copy');
+    toast('Link copied!');
+    return;
+  }
   navigator.clipboard.writeText(input.value).then(() => {
-    btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = 'Copy link'; }, 2000);
+    toast('Link copied!');
   }).catch(() => {
     input.select();
     document.execCommand('copy');
@@ -1988,14 +2001,27 @@ function hideReconnectOverlay() {
 // server until something forces a fresh connection. Force a clean
 // reconnect whenever the page regains visibility after being hidden for a
 // while, so a zombied connection can't silently swallow commands.
+const HIDDEN_STALE_MS = 5000;
 let _hiddenAt = null;
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { _hiddenAt = Date.now(); return; }
-  const wasHiddenAWhile = _hiddenAt && (Date.now() - _hiddenAt >= 5000);
+  const wasHiddenAWhile = _hiddenAt && (Date.now() - _hiddenAt >= HIDDEN_STALE_MS);
   _hiddenAt = null;
-  if (!wasHiddenAWhile || !roomId || _wasReplaced) return;
+  if (!roomId || _wasReplaced) return;
+  if (!wasHiddenAWhile) {
+    // Too short to force a reconnect, so nothing else re-syncs state — but
+    // applyControllerStateSnapshot still applied any messages that arrived
+    // during the hide (Object.assign runs regardless of silent/_hiddenAt),
+    // it just skipped their sound/Spotify side effects. `state` already
+    // reflects reality, so just sync Spotify to it directly rather than
+    // leaving it silently stuck out of sync until the next real transition.
+    if (mode === 'controller') _syncSpotifyToPhase(state);
+    return;
+  }
   // Reconnect to the same mat with the same clientId — the server treats this
-  // as a silent same-device reclaim and replies with the live timer state.
+  // as a silent same-device reclaim and replies with the live timer state
+  // (which re-syncs Spotify itself, via _syncSpotifyToPhase in the 'config'
+  // handler below).
   if (mode === 'controller') {
     openSocket('controller', _controllerSocketParams());
   } else if (mode === 'display' && _displayTvCode) {
@@ -2140,10 +2166,17 @@ function applyControllerStateSnapshot(s, { silent = false } = {}) {
   const prevRound   = state.currentRound;
   Object.assign(state, s);
 
-  // Suppress phase-transition sounds from queued WS messages that arrive while
-  // the phone is waking from sleep. _hiddenAt is set when the screen turns off
-  // and only cleared inside the visibilitychange handler, so it's still set
-  // during the narrow gap between "browser resumes network" and that event.
+  // Suppress phase-transition sounds/Spotify-diff from queued WS messages that
+  // arrive while the phone is waking from sleep. _hiddenAt is set when the
+  // screen turns off and only cleared inside the visibilitychange handler, so
+  // it's still set during the narrow gap between "browser resumes network" and
+  // that event. This can also suppress a genuinely live transition that
+  // happens to arrive while merely hidden (not actually asleep/suspended —
+  // e.g. a desktop tab switch) rather than mid wake-flush; that's an
+  // acceptable tradeoff for the bell (no worse than before this guard existed
+  // for the phone-sleep case), but Spotify is resynced unconditionally on
+  // every visibility return below, regardless of hide duration, so it can
+  // never end up silently stuck out of sync just because a hide was short.
   if (!silent && !_hiddenAt) {
     // Spotify auto pause/resume (coach controller only; no-op unless connected
     // + enabled). Fire-and-forget so a slow/failed Spotify call never blocks the

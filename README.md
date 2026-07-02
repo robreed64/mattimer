@@ -150,6 +150,42 @@ Browser-safe config lives in `public/supabase-config.js` (publishable key) and `
   alter table gym_login_attempts enable row level security; -- no policies: service role only
   ```
 
+- **Referrals** — `?ref=<room code>` on the landing page is captured
+  client-side and threaded through signup as `referredBy`
+  (`api/signup.js`). Add the column once in the Supabase SQL editor:
+
+  ```sql
+  alter table gyms
+    add column referred_by text;
+  ```
+
+- `waitlist` — emails collected from the landing page / calculator page's
+  waitlist forms (`api/waitlist.js`). `email` is unique; a repeat signup is
+  treated as success (23505) rather than an error:
+
+  ```sql
+  create table waitlist (
+    id bigint generated always as identity primary key,
+    email text not null unique,
+    created_at timestamptz not null default now()
+  );
+  alter table waitlist enable row level security; -- no policies: service role only
+  ```
+
+- `waitlist_attempts` — IP + timestamp rows backing the waitlist rate limit
+  (5/hour per IP, 50/hour global; rows pruned after 24h). Same shape as
+  `signup_attempts`:
+
+  ```sql
+  create table waitlist_attempts (
+    id bigint generated always as identity primary key,
+    ip text not null,
+    created_at timestamptz not null default now()
+  );
+  create index waitlist_attempts_ip_time on waitlist_attempts (ip, created_at);
+  alter table waitlist_attempts enable row level security; -- no policies: service role only
+  ```
+
 Platform admins carry `app_metadata.role = 'admin'` and use `/admin.html`.
 
 ## Legacy LAN/Electron version

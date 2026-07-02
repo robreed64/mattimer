@@ -187,11 +187,30 @@
     finally { clearTimeout(to); }
   }
 
-  async function pause()  { if (enabled() && premiumOk) await apiCall('PUT', '/me/player/pause'); }
-  async function resume() { if (enabled() && premiumOk) await apiCall('PUT', '/me/player/play');  }
+  // Last command we successfully sent Spotify — lets a redundant call (e.g. a
+  // reconnect-triggered resync firing again while nothing actually changed,
+  // such as a flaky-wifi coach's WebSocket bouncing mid-round) skip hitting
+  // the API a second time. Only updated on a confirmed-successful response,
+  // so a failed call is retried next time rather than wrongly skipped.
+  let lastCommand = null; // 'pause' | 'resume' | null
+
+  async function pause() {
+    if (!enabled() || !premiumOk || lastCommand === 'pause') return;
+    const res = await apiCall('PUT', '/me/player/pause');
+    if (res && res.ok) lastCommand = 'pause';
+  }
+  async function resume() {
+    if (!enabled() || !premiumOk || lastCommand === 'resume') return;
+    const res = await apiCall('PUT', '/me/player/play');
+    if (res && res.ok) lastCommand = 'resume';
+  }
 
   // ─── settings UI ────────────────────────────────────────────────────
-  function setEnabled(on) { localStorage.setItem(ENABLED_KEY, on ? '1' : '0'); refreshUi(); }
+  function setEnabled(on) {
+    localStorage.setItem(ENABLED_KEY, on ? '1' : '0');
+    lastCommand = null; // unknown real playback state across a disable/enable toggle
+    refreshUi();
+  }
   function saveOpts() {
     const o = {
       pauseRest:   document.getElementById('spotifyPauseRestToggle')?.checked ?? true,
@@ -200,7 +219,7 @@
     };
     localStorage.setItem(OPTS_KEY, JSON.stringify(o));
   }
-  function disconnect() { clearTokens(); premiumOk = true; statusText = ''; refreshUi(); }
+  function disconnect() { clearTokens(); premiumOk = true; statusText = ''; lastCommand = null; refreshUi(); }
 
   function refreshUi() {
     const wrap = document.getElementById('spotifyField');

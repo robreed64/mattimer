@@ -63,8 +63,21 @@ async function checkGymLoginRate(admin, ip) {
   });
 }
 
+// Waitlist has no honeypot/validation beyond an email-format check, so it's
+// the softest target of the public endpoints — same window/caps as signup.
+const WAITLIST_WINDOW_MS = 60 * 60 * 1000;
+const WAITLIST_PER_IP_MAX = 5;
+const WAITLIST_GLOBAL_MAX = 50;
+
+async function checkWaitlistRate(admin, ip) {
+  return checkRate(admin, 'waitlist_attempts', ip, {
+    windowMs: WAITLIST_WINDOW_MS, perIpMax: WAITLIST_PER_IP_MAX, globalMax: WAITLIST_GLOBAL_MAX,
+  });
+}
+
 module.exports = {
   checkSignupRate, PER_IP_MAX: SIGNUP_PER_IP_MAX, GLOBAL_MAX: SIGNUP_GLOBAL_MAX,
   checkPairingRate, PAIRING_PER_IP_MAX, PAIRING_GLOBAL_MAX,
   checkGymLoginRate, GYM_LOGIN_PER_IP_MAX, GYM_LOGIN_GLOBAL_MAX,
+  checkWaitlistRate, WAITLIST_PER_IP_MAX, WAITLIST_GLOBAL_MAX,
 };
