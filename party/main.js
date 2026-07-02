@@ -92,6 +92,11 @@ export default class BjjTimerServer {
       if (sw) this.swStates[i] = sw;
       const at = await this.room.storage.get('activeTab:' + i);
       if (at) this.activeTab[i] = at;
+      // Recover mat ownership (survive DO hibernation) — without this, every
+      // reconnect after a hibernation looks like a stranger to the busy-mat
+      // owner check, letting anyone silently take over a running timer.
+      const mc = await this.room.storage.get('matClientId:' + i);
+      if (mc) this.matClientId[i] = mc;
     }
     // Recover any pending idle-clock sweeps (survive DO hibernation).
     const savedSweeps = await this.room.storage.get('idleSweepAt');
@@ -266,11 +271,28 @@ export default class BjjTimerServer {
       this._clearIdleSweep(primary);
 
       const ctrlColor = color || CTRL_COLORS[primary];
-      this.controllers[connection.id] = { slot: primary, mats: bound.slice(), color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };
-      for (const m of bound) {
+      // Track the timer's actual mat group, not the raw request — when
+      // preservingRunning kept ts.mats unchanged (line 247), a `bound` that's
+      // a different subset would otherwise leave ctrl.mats out of sync with
+      // ts.mats, and ctrl:release/ctrl:rename/onClose all iterate ctrl.mats,
+      // so mats missing from it never get cleaned up or freed.
+      const ctrlMats = this.timerStates[primary].mats.slice();
+      this.controllers[connection.id] = { slot: primary, mats: ctrlMats, color: ctrlColor, name, profileId, authSub, clientId, connectedAt: Date.now(), userRole: auth?.role || null };
+      // Bind ctrlSlots/ctrlNames/matClientId across ctrlMats (the timer's real
+      // group), not just bound (the raw request) — ctrlSlots resets on DO
+      // hibernation same as controllers does, so a mat outside bound but
+      // inside the preserved group would otherwise never get an occupant set,
+      // leaving _freeCtrlSlot with nothing to find (and thus nothing to
+      // notify) for it later at ctrl:release/onClose.
+      for (const m of ctrlMats) {
         this.ctrlSlots[m] = connection.id;
         this.ctrlNames[m] = name;
         this.matClientId[m] = clientId;
+        // Persisted so ownership survives DO hibernation — without this, a
+        // hibernation reset makes every reconnect look like a stranger to
+        // _isMatBusy's owner check, letting anyone silently take over a mat
+        // with a live running timer.
+        this.room.storage.put('matClientId:' + m, clientId).catch(() => {});
       }
       connection.setState({ role: 'controller', slot: primary, mats: bound.slice() });
 
@@ -285,9 +307,13 @@ export default class BjjTimerServer {
         stopwatchState: this._computeCurrentStopwatch(primary),
         tab:            this.activeTab[primary],
       }));
-      // Push the coach's color/name + live timer to every TV in the group.
+      // Push the coach's color/name + live timer to every TV in the group —
+      // ctrlMats (the timer's actual group), not bound (the raw request),
+      // so a mat kept alive by preservingRunning but outside this reconnect's
+      // request still gets its TV updated immediately instead of waiting on
+      // the next periodic broadcast.
       const cur = this._computeCurrentState(primary);
-      for (const m of bound) {
+      for (const m of ctrlMats) {
         this._sendToTv(m, JSON.stringify({ type: 'ctrl:color', color: ctrlColor, name }));
         if (cur) this._sendToTv(m, JSON.stringify({ type: 'state', ...cur }));
       }
@@ -405,6 +431,7 @@ export default class BjjTimerServer {
           this.room.storage.delete('timerState:' + m).catch(() => {});
           this.room.storage.delete('stopwatchState:' + m).catch(() => {});
           this.room.storage.delete('activeTab:' + m).catch(() => {});
+          this.room.storage.delete('matClientId:' + m).catch(() => {});
           this._freeCtrlSlot(m, true); // notify the TV → it returns to the idle clock
         }
         this._broadcastMatStatus();
@@ -895,9 +922,9 @@ export default class BjjTimerServer {
   async onAlarm() {
     const now = Date.now();
 
-    // On the first alarm after DO hibernation, recover idleSweepAt and swStates
-    // from storage. _idleSweepRecovered is in-memory so it resets to falsy after
-    // hibernation, ensuring exactly one recovery read per wake cycle.
+    // On the first alarm after DO hibernation, recover idleSweepAt from storage.
+    // _idleSweepRecovered is in-memory so it resets to falsy after hibernation,
+    // ensuring exactly one recovery read per wake cycle.
     if (!this._idleSweepRecovered) {
       try {
         const saved = await this.room.storage.get('idleSweepAt');
@@ -905,17 +932,33 @@ export default class BjjTimerServer {
       } catch {}
       this._idleSweepRecovered = true;
     }
+    // Per-slot timerStates/swStates recovery, gated the same way — but tracked
+    // per slot (not one shared flag) so a transient failure on one slot keeps
+    // retrying on later ticks instead of being marked "done" forever. Once a
+    // slot's recovery genuinely succeeds, every future write to it goes through
+    // this same instance's own methods (memory and storage stay in sync
+    // together), so re-reading storage every tick for an idle slot after that
+    // would just be a wasted read for however long the alarm stays armed.
+    if (!this._slotRecovered) this._slotRecovered = { 1: false, 2: false, 3: false, 4: false };
+
+    // Slots that errored this tick — state couldn't be verified, so treat them
+    // as busy for THIS tick's reschedule/sweep decisions only. Unlike a sentinel
+    // written into timerStates, this never persists: next tick retries the real
+    // storage read normally, so a transient error can't wedge a slot forever.
+    const erroredSlots = new Set();
 
     for (let slot = 1; slot <= 4; slot++) {
       try {
-        // Recover in-memory state after DO hibernation
-        if (!this.timerStates[slot]) {
-          const saved = await this.room.storage.get('timerState:' + slot);
-          if (saved) this.timerStates[slot] = saved;
-        }
-        if (!this.swStates[slot]) {
-          const saved = await this.room.storage.get('stopwatchState:' + slot);
-          if (saved) this.swStates[slot] = saved;
+        if (!this._slotRecovered[slot]) {
+          if (!this.timerStates[slot]) {
+            const saved = await this.room.storage.get('timerState:' + slot);
+            if (saved) this.timerStates[slot] = saved;
+          }
+          if (!this.swStates[slot]) {
+            const saved = await this.room.storage.get('stopwatchState:' + slot);
+            if (saved) this.swStates[slot] = saved;
+          }
+          this._slotRecovered[slot] = true;
         }
         const ts = this.timerStates[slot];
         if (!ts?.running || !ts.startedAt) continue;
@@ -931,17 +974,19 @@ export default class BjjTimerServer {
         }
       } catch (e) {
         console.error(`onAlarm slot ${slot}:`, e);
-        // Can't verify timer state — treat as running to block any pending idle sweep.
-        if (!this.timerStates[slot]) this.timerStates[slot] = { running: true };
+        // Can't verify timer state this tick — block any pending idle sweep for
+        // it below and make sure we get another tick to retry.
+        erroredSlots.add(slot);
       }
     }
 
-    try { this._runIdleSweeps(now); } catch (e) { console.error('onAlarm sweeps:', e); }
+    try { this._runIdleSweeps(now, erroredSlots); } catch (e) { console.error('onAlarm sweeps:', e); }
 
-    // Keep ticking while any mat is running, or while an idle sweep is pending
-    // (so an abandoned/ended class still returns its TV to the clock). setAlarm
-    // replaces any existing alarm, so this is safe to call unconditionally.
-    if (this._hasAnyRunning() || this._hasPendingSweep()) {
+    // Keep ticking while any mat is running, an idle sweep is pending (so an
+    // abandoned/ended class still returns its TV to the clock), or a slot
+    // errored this tick and needs a retry. setAlarm replaces any existing
+    // alarm, so this is safe to call unconditionally.
+    if (this._hasAnyRunning() || this._hasPendingSweep() || erroredSlots.size) {
       await this.room.storage.setAlarm(Date.now() + 1000);
     }
   }
@@ -949,12 +994,18 @@ export default class BjjTimerServer {
   // Return TVs to the idle clock for mats whose class has been abandoned (coach
   // gone) or has ended, once the grace period elapses. A live controller or a
   // still-running timer cancels/defers the sweep.
-  _runIdleSweeps(now) {
+  _runIdleSweeps(now, erroredSlots) {
     let changed = false;
+    // Built once per call (not once per pending slot, as a fresh
+    // _isConnectionAlive scan per slot would do) — reused for up to 4 slots,
+    // matching the same liveIds pattern already used in onConnect.
+    let liveIds = null;
     for (let p = 1; p <= 4; p++) {
       const due = this.idleSweepAt[p];
       if (!due) continue;
-      if (this._isConnectionAlive(this.ctrlSlots[p])) { this.idleSweepAt[p] = 0; changed = true; continue; } // reclaimed
+      if (erroredSlots?.has(p)) continue;                                             // state unverified this tick — wait
+      if (!liveIds) liveIds = new Set([...this.room.getConnections('controller')].map(c => c.id));
+      if (this.ctrlSlots[p] && liveIds.has(this.ctrlSlots[p])) { this.idleSweepAt[p] = 0; changed = true; continue; } // reclaimed
       if (this.timerStates[p]?.running) continue;                                    // still ticking — wait
       if (this.swStates[p]?.running) continue;                                       // live stopwatch — runs until a coach stops it
       if (now < due) continue;
@@ -969,6 +1020,7 @@ export default class BjjTimerServer {
         this.activeTab[m] = 'timer';
         this.room.storage.delete('stopwatchState:' + m).catch(() => {});
         this.room.storage.delete('activeTab:' + m).catch(() => {});
+        this.room.storage.delete('matClientId:' + m).catch(() => {});
         this._sendToTv(m, JSON.stringify({ type: 'ctrl:color', color: null, name: null }));
       }
       this.timerStates[p] = null;

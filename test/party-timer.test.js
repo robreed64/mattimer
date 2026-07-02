@@ -270,6 +270,80 @@ test('onConnect preserve-running does not overwrite mat group or wipe stopwatch 
   assert.equal(s.swStates[1]?.running, true, 'stopwatch state not wiped');
 });
 
+// Code review fix: matClientId must persist across DO hibernation. Before this
+// fix it was in-memory only, so every post-hibernation reconnect looked like a
+// stranger — the true owner fell back through the "preserve running timer"
+// path instead of a real reclaim, and a genuinely different coach's device
+// could silently take over a mat with a live class (matClientId[p] was always
+// falsy, so the busy-mat lock at onConnect never triggered).
+test('matClientId persists across hibernation so the true owner reclaims instead of merely preserving', async () => {
+  const room = makeDemoRoom();
+  const { conn, ctx } = makeCtrlConn('conn1', { mats: '1', clientId: 'phone-abc' });
+  room.getConnections = (tag) => tag === 'controller' ? [conn] : [];
+
+  const s = new BjjTimerServer(room);
+  const baseTs = { ...s._newTimerState(), mats: [1],
+    running: true, startedAt: Date.now(), timeRemainingAtStart: 200, timeRemaining: 200 };
+  await room.storage.put('timerState:1', baseTs);
+  await room.storage.put('matClientId:1', 'phone-abc'); // persisted by the original connect
+  await s.onStart();
+
+  assert.equal(s.matClientId[1], 'phone-abc', 'matClientId recovered from storage');
+
+  await s.onConnect(conn, ctx);
+
+  assert.equal(conn._closed, false, 'the true owner is accepted');
+  assert.equal(s.timerStates[1].running, true, 'timer still running');
+});
+
+test('a different device is blocked from taking over a hibernated mat with a live class', async () => {
+  const room = makeDemoRoom();
+  const { conn, ctx } = makeCtrlConn('conn1', { mats: '1', clientId: 'phone-xyz' }); // different clientId
+  room.getConnections = (tag) => tag === 'controller' ? [conn] : [];
+
+  const s = new BjjTimerServer(room);
+  const baseTs = { ...s._newTimerState(), mats: [1],
+    running: true, startedAt: Date.now(), timeRemainingAtStart: 200, timeRemaining: 200 };
+  await room.storage.put('timerState:1', baseTs);
+  await room.storage.put('matClientId:1', 'phone-abc'); // held by a different device
+  await s.onStart();
+
+  await s.onConnect(conn, ctx);
+
+  assert.equal(conn._closed, true, 'a stranger cannot silently bind to a busy mat after hibernation');
+  assert.ok(conn._sent.some(m => m.type === 'error'), 'an error is sent explaining the mat is in use');
+});
+
+// Code review fix: when preservingRunning kept ts.mats unchanged across a
+// hibernation reconnect that requested a smaller mat subset, ctrl.mats (and
+// ctrlSlots/ctrlNames for the excluded mat) must still track the timer's full
+// group — otherwise ctrl:release/ctrl:rename/onClose, which all iterate
+// ctrl.mats, silently skip the excluded mat and its TV is never told to go
+// idle or freed.
+test('a mat outside the reconnect request but inside the preserved group is still tracked and released', async () => {
+  const room = makeDemoRoom();
+  const { conn, ctx } = makeCtrlConn('conn1', { mats: '1', clientId: 'phone-new' }); // only requests mat 1
+  room.getConnections = (tag) => tag === 'controller' ? [conn] : [];
+
+  const s = new BjjTimerServer(room);
+  const baseTs = { ...s._newTimerState(), mats: [1, 2], // group originally covered mats 1+2
+    running: true, startedAt: Date.now(), timeRemainingAtStart: 200, timeRemaining: 200 };
+  await room.storage.put('timerState:1', baseTs);
+  // matClientId was never persisted (e.g. hibernation before this fix shipped),
+  // so this reconnect is recognized as preservingRunning, not a reclaim.
+  await s.onStart();
+
+  await s.onConnect(conn, ctx);
+
+  assert.deepEqual(s.controllers['conn1'].mats, [1, 2], 'ctrl.mats tracks the full preserved group, not just the request');
+  assert.equal(s.ctrlSlots[2], 'conn1', 'mat 2 is bound to this connection so it can later be found and freed');
+
+  await s.onMessage(JSON.stringify({ type: 'ctrl:release' }), conn);
+
+  assert.equal(s.ctrlSlots[2], null, 'mat 2 is freed, not left orphaned, on release');
+  assert.equal(s.ctrlNames[2], '', 'mat 2 TV notification path is reached (name cleared)');
+});
+
 // Bug 2: onAlarm must recover swStates from storage after DO hibernation so
 // a running stopwatch correctly blocks a pending idle sweep.
 test('onAlarm recovers swStates from storage and uses it to block an overdue idle sweep', async () => {
@@ -358,12 +432,17 @@ test('template:save for a deleted template broadcasts templates:updated', async 
 });
 
 // Bug 6: when onAlarm cannot recover a slot's timer state from storage it
-// must set a {running:true} sentinel to prevent a pending idle sweep firing.
-test('onAlarm storage error sets a running sentinel to block an idle sweep', async () => {
+// must block a pending idle sweep for that tick only — not by writing a
+// permanent {running:true} sentinel into timerStates, which would prevent
+// ever reading the real state back from storage again (a transient error
+// would wedge the slot forever). The block must be transient: it clears on
+// the very next tick once storage succeeds again.
+test('onAlarm storage error blocks an idle sweep for that tick without wedging the slot', async () => {
   const { s, room } = serverOnMat1();
   s._idleSweepRecovered = true;
   s.idleSweepAt[1] = Date.now() - 1; // overdue sweep
   s.timerStates[1] = null;            // simulate hibernation
+  room._store.set('timerState:1', { ...s._newTimerState(), mats: [1], running: false });
 
   const origGet = room.storage.get.bind(room.storage);
   room.storage.get = async (k) => {
@@ -373,8 +452,19 @@ test('onAlarm storage error sets a running sentinel to block an idle sweep', asy
 
   await s.onAlarm();
 
-  assert.equal(s.timerStates[1]?.running, true, 'sentinel {running:true} set on storage error');
-  assert.ok(s.idleSweepAt[1] !== 0, 'idle sweep blocked by sentinel');
+  assert.equal(s.timerStates[1], null, 'no permanent sentinel written into timerStates');
+  assert.ok(s.idleSweepAt[1] !== 0, 'idle sweep blocked for this tick');
+  assert.ok(room._alarms.length >= 1, 'alarm rescheduled so the slot gets a retry');
+
+  // Storage recovers; the next tick must read the real (non-running) state
+  // back and let the now-due idle sweep proceed instead of staying wedged —
+  // proceeding to finalize (nulling timerStates[1] out again) is only
+  // possible if the sweep actually saw the real, non-running state.
+  room.storage.get = origGet;
+  await s.onAlarm();
+
+  assert.equal(s.idleSweepAt[1], 0, 'idle sweep finally proceeds once state is verified');
+  assert.equal(s.timerStates[1], null, 'slot finalized to idle, not stuck on a fake sentinel');
 });
 
 // Bug 7: idleSweepAt must be read from storage exactly once per wake cycle,
@@ -393,6 +483,27 @@ test('onAlarm reads idleSweepAt from storage only once per wake cycle', async ()
   advance(1); await s.onAlarm();
   advance(1); await s.onAlarm();
   assert.equal(reads, 1, 'does not re-read idleSweepAt on subsequent ticks');
+});
+
+// Code review fix: swStates/timerStates recovery for an idle slot must not
+// re-read storage on every tick — only once per wake cycle, same as
+// idleSweepAt. Mat 1 running keeps the alarm armed for several ticks; mat 2
+// is idle throughout and has nothing in storage, which is the common case
+// (3 of 4 mats idle at any time) that was previously re-read every second.
+test('onAlarm reads an idle slot\'s stopwatchState from storage only once per wake cycle', async () => {
+  const { s, room } = serverOnMat1();
+  await start(s);
+
+  let reads = 0;
+  const origGet = room.storage.get.bind(room.storage);
+  room.storage.get = async (k) => { if (k === 'stopwatchState:2') reads++; return origGet(k); };
+
+  await s.onAlarm();
+  assert.equal(reads, 1, 'reads mat 2\'s stopwatchState once on first tick after wake');
+
+  advance(1); await s.onAlarm();
+  advance(1); await s.onAlarm();
+  assert.equal(reads, 1, 'does not re-read mat 2\'s stopwatchState on subsequent ticks while it stays idle');
 });
 
 // ─── Client-side duration change bug ─────────────────────────────────
